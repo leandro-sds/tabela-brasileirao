@@ -1,0 +1,2 @@
+Generating manifest addon\manifest.ini
+Generating Addon tabelaBrasileirao-1.0.0.nvda-addon

@@ -1,11 +1,10 @@
-name = {addon_name}
-summary = "{addon_summary}"
-description = """{addon_description}"""
-author = "{addon_author}"
-url = {addon_url}
-version = {addon_version}
-changelog = """{addon_changelog}"""
-docFileName = {addon_docFileName}
-minimumNVDAVersion = {addon_minimumNVDAVersion}
-lastTestedNVDAVersion = {addon_lastTestedNVDAVersion}
-updateChannel = {addon_updateChannel}
+name = tabelaBrasileirao
+summary = "Tabela do Brasileirão"
+description = """Mostra a classificação do Brasileirão Série A no NVDA.
+Atalhos na tabela: V/E/D/S/J/P/C.
+Pode usar a chave grátis (limitada) do add-on ou informar uma chave própria da API Futebol."""
+author = "Leandro Souza <leandrosspoeta@gmail.com>"
+url = https://github.com/leandro-sds/tabela-brasileirao/
+version = 1.0.0
+minimumNVDAVersion = 2024.1.0
+lastTestedNVDAVersion = 2025.2.3
