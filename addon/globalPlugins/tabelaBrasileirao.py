@@ -390,18 +390,48 @@ class TabelaDialog(wx.Dialog):
 
 		it = self.dados[idx]
 		nome = (it.get("equipe") or it.get("time") or {}).get("nome_popular", _("Time"))
-		mapa = {"V": "vitorias", "E": "empates", "D": "derrotas", "S": "saldo_gols", "J": "jogos", "P": "gols_pro", "C": "gols_contra"}
-		nomes = {"V": _("Vitórias"), "E": _("Empates"), "D": _("Derrotas"), "S": _("Saldo"), "J": _("Jogos"), "P": _("Gols pró"), "C": _("Gols contra")}
+		mapa = {"V": "vitorias", "E": "empates", "D": "derrotas", "S": "saldo_gols", "J": "jogos", "P": "gols_pro", "C": "gols_contra", "A": "aproveitamento"}
+		nomes = {"V": _("Vitórias"), "E": _("Empates"), "D": _("Derrotas"), "S": _("Saldo"), "J": _("Jogos"), "P": _("Gols pró"), "C": _("Gols contra"), "A": _("Aproveitamento")}
 
 		if tecla in mapa:
 			chave = mapa[tecla]
+			valor = 0
 			if chave == "gols_pro":
 				valor = it.get("gols_pro", it.get("golsPro", it.get("golspro", 0)))
+				ui.message(f"{nome}: {nomes[tecla]} {valor}")
 			elif chave == "gols_contra":
 				valor = it.get("gols_contra", it.get("golsContra", it.get("golscontra", 0)))
+				ui.message(f"{nome}: {nomes[tecla]} {valor}")
+			elif chave == "aproveitamento":
+				valor = it.get("aproveitamento", None)
+				if valor is None:
+					pontos = it.get("pontos", it.get("ponto", 0))
+					jogos = it.get("jogos", 0)
+					try:
+						pontos = float(pontos)
+						jogos = float(jogos)
+					except Exception:
+						pontos = 0.0
+						jogos = 0.0
+					if jogos > 0:
+						valor = (pontos / (jogos * 3.0)) * 100.0
+					else:
+						valor = 0.0
+				try:
+					if isinstance(valor, str):
+						txt = valor.strip()
+						if txt and not txt.endswith("%"):
+							txt = txt + "%"
+						ui.message(f"{nome}: {nomes[tecla]} {txt}")
+					else:
+						pct = float(valor)
+						txt = f"{pct:.1f}".replace(".", ",") + "%"
+						ui.message(f"{nome}: {nomes[tecla]} {txt}")
+				except Exception:
+					ui.message(f"{nome}: {nomes[tecla]} {valor}")
 			else:
 				valor = it.get(chave, 0)
-			ui.message(f"{nome}: {nomes[tecla]} {valor}")
+				ui.message(f"{nome}: {nomes[tecla]} {valor}")
 		else:
 			event.Skip()
 
@@ -534,6 +564,25 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		except Exception:
 			log.exception("Falha ao exibir detalhes do erro")
 
+
+	def _mostrar_erro_e_cache(self, resumo: str, detalhes: str, dados_cache, idade_segundos: float):
+		"""Mostra detalhes do erro e, em seguida, abre a tabela com o cache."""
+		try:
+			mins = int(round((idade_segundos or 0) / 60.0))
+			resumo2 = (resumo or "").strip() or _("Ocorreu um erro.")
+			if mins <= 0:
+				resumo2 = resumo2 + " " + _("Mostrando dados do cache.")
+			else:
+				resumo2 = resumo2 + " " + _("Mostrando dados do cache ({mins} min).").format(mins=mins)
+			self._mostrar_erro(resumo2, detalhes)
+			self._mostrar_tabela(dados_cache)
+		except Exception:
+			log.exception("Falha ao exibir erro e cache")
+			try:
+				self._mostrar_tabela(dados_cache)
+			except Exception:
+				pass
+
 	def _mostrar_tabela(self, dados):
 		try:
 			TabelaDialog(dados, onTrocarChave=self._trocar_chave_api, onAbrirWidget=self._abrir_widget).ShowModal()
@@ -559,6 +608,21 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		if (time.time() - timestamp) >= CACHE_TTL_SECONDS:
 			return None
 		return dados
+
+
+	def _carregar_cache_stale(self):
+		"""Carrega o cache mesmo expirado. Retorna (dados, idadeSegundos) ou (None, None)."""
+		cache = _read_json(CACHE_FILE)
+		if not isinstance(cache, dict):
+			return (None, None)
+		timestamp = cache.get("timestamp")
+		dados = cache.get("dados")
+		if not isinstance(timestamp, (int, float)) or not isinstance(dados, list):
+			return (None, None)
+		idade = time.time() - float(timestamp)
+		if idade < 0:
+			idade = 0
+		return (dados, idade)
 
 	def _carregar_token(self):
 		cfg = _read_settings()
@@ -696,19 +760,23 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 				cloud = (detail or "").lower()
 				if ("error 1010" in cloud) or (("1010" in cloud) and ("cloudflare" in cloud or "access denied" in cloud)):
-					resumo = _("Bloqueado pelo Cloudflare (erro 1010).")
+					resumo = _("Bloqueado pelo Cloudflare (erro 1010). Tente outra rede (por exemplo, hotspot do celular) ou use \"Ver no navegador\".")
 					detalhes = _("URL: {url}\nHTTP: {code}\nMotivo: {reason}\n\nResposta:\n{detail}\n").format(
 						url=url, code=code or "", reason=reason or "", detail=detail or ""
 					)
-					wx.CallAfter(lambda: self._mostrar_erro(resumo, detalhes))
+					dados_cache, idade = self._carregar_cache_stale()
+					if dados_cache is not None:
+						wx.CallAfter(lambda: self._mostrar_erro_e_cache(resumo, detalhes, dados_cache, idade))
+					else:
+						wx.CallAfter(lambda: self._mostrar_erro(resumo, detalhes))
 					return
 
 				if code == 401:
-					resumo = _("Chave inválida ou expirada (erro 401).")
+					resumo = _("Chave inválida ou expirada (erro 401). Se você estiver usando a chave grátis, ela pode ter atingido o limite. Use \"Trocar chave API\" ou \"Ver no navegador\".")
 				elif code == 403:
-					resumo = _("Acesso negado (erro 403).")
+					resumo = _("Acesso negado (erro 403). Se você estiver usando a chave grátis, ela pode ter atingido o limite ou sido bloqueada. Use \"Trocar chave API\" ou \"Ver no navegador\".")
 				elif code == 429:
-					resumo = _("Muitas requisições (erro 429). Tente novamente em alguns minutos.")
+					resumo = _("Muitas requisições (erro 429). Se você estiver usando a chave grátis, ela pode ter atingido o limite. Tente novamente mais tarde ou use \"Trocar chave API\".")
 				elif isinstance(code, int) and 500 <= code <= 599:
 					resumo = _("A API está instável no momento. Tente novamente mais tarde.")
 				else:
@@ -720,7 +788,11 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 				detalhes = _("URL: {url}\nHTTP: {code}\nMotivo: {reason}\n\nResposta:\n{detail}\n").format(
 					url=url, code=code or "", reason=reason or "", detail=detail or ""
 				)
-				wx.CallAfter(lambda: self._mostrar_erro(resumo, detalhes))
+				dados_cache, idade = self._carregar_cache_stale()
+				if dados_cache is not None:
+					wx.CallAfter(lambda: self._mostrar_erro_e_cache(resumo, detalhes, dados_cache, idade))
+				else:
+					wx.CallAfter(lambda: self._mostrar_erro(resumo, detalhes))
 			except urllib.error.URLError as e:
 				log.exception("URLError ao consultar API")
 				reason = getattr(e, "reason", "")
@@ -731,12 +803,20 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 						s = s[:160].rstrip() + "…"
 					resumo = resumo + " " + s
 				detalhes = _("URL: {url}\nErro: {err}\n").format(url=url, err=str(reason or e))
-				wx.CallAfter(lambda: self._mostrar_erro(resumo, detalhes))
+				dados_cache, idade = self._carregar_cache_stale()
+				if dados_cache is not None:
+					wx.CallAfter(lambda: self._mostrar_erro_e_cache(resumo, detalhes, dados_cache, idade))
+				else:
+					wx.CallAfter(lambda: self._mostrar_erro(resumo, detalhes))
 			except Exception as e:
 				log.exception("Erro ao consultar API")
 				resumo = _("Erro ao buscar dados. Tente novamente.")
 				detalhes = _("URL: {url}\nErro: {err}\n").format(url=url, err=repr(e))
-				wx.CallAfter(lambda: self._mostrar_erro(resumo, detalhes))
+				dados_cache, idade = self._carregar_cache_stale()
+				if dados_cache is not None:
+					wx.CallAfter(lambda: self._mostrar_erro_e_cache(resumo, detalhes, dados_cache, idade))
+				else:
+					wx.CallAfter(lambda: self._mostrar_erro(resumo, detalhes))
 			finally:
 				self._fetchInProgress = False
 				self._stop_loading_timer()

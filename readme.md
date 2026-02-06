@@ -4,7 +4,7 @@
 
 ---
 
-## 📖 Descrição
+## ⚽ Descrição
 
 O **Tabela Brasileirão** é um complemento para o NVDA que permite acompanhar a **classificação do Brasileirão Série A** com rapidez e acessibilidade.
 
