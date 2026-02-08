@@ -9,7 +9,7 @@ addon_info = {
 	"addon_description": _("""Mostra a classificação do Brasileirão Série A no NVDA.
 Atalhos na tabela: V/E/D/S/J/P/C.
 Pode usar a chave grátis (limitada) do add-on ou informar uma chave própria da API Futebol."""),
-	"addon_version": "2026.2.06",
+	"addon_version": "2026.2.08",
 	"addon_author": "Leandro Souza",
 	"addon_url": "https://github.com/leandro-sds/tabela-brasileirao/",
 	"addon_docFileName": "readme.md",
