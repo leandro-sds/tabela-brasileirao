@@ -339,6 +339,66 @@ class TabelaDialog(wx.Dialog):
 		except Exception:
 			pass
 
+	def _mostrar_ajuda(self):
+		# Janela de ajuda sem botão OK; fecha com Esc e volta o foco para a tabela
+		dlg = wx.Dialog(self, title=_("Ajuda"), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+		texto = wx.TextCtrl(
+			dlg,
+			wx.ID_ANY,
+			"""Atalhos disponíveis:
+
+- Control + Shift + T: abre a tabela.
+- Esc: fecha a tabela.
+- Setas para cima/baixo: navega na lista e anuncia classificação, time e pontos.
+- F1: abre esta ajuda.
+
+Atalhos para obter dados (time selecionado):
+
+- V: Vitórias
+- E: Empates
+- D: Derrotas
+- S: Saldo de gols
+- J: Jogos
+- P: Gols pró
+- C: Gols contra
+- A: Aproveitamento
+
+Caminhando com Tab, você encontrará os botões:
+
+- Trocar chave API: informar uma nova chave
+- Ver no navegador: abrir a visualização web no navegador padrão
+
+Pressione Esc para voltar à tabela.""",
+			style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2,
+		)
+		texto.SetMinSize((520, 320))
+		sizer = wx.BoxSizer(wx.VERTICAL)
+		sizer.Add(texto, 1, wx.EXPAND | wx.ALL, 10)
+		dlg.SetSizerAndFit(sizer)
+		dlg.CentreOnParent()
+
+		def onKey(event):
+			keyCode = event.GetKeyCode()
+			if keyCode == wx.WXK_ESCAPE:
+				dlg.EndModal(wx.ID_CANCEL)
+				return
+			event.Skip()
+
+		dlg.Bind(wx.EVT_CHAR_HOOK, onKey)
+		texto.SetFocus()
+		try:
+			dlg.ShowModal()
+		finally:
+			dlg.Destroy()
+			# Volta o foco para a lista da tabela, se possível
+			try:
+				if hasattr(self, "lista"):
+					self.lista.SetFocus()
+				else:
+					self.SetFocus()
+			except Exception:
+				pass
+
 	def _ao_redimensionar_lista(self, event):
 		self._ajustar_largura_coluna()
 		event.Skip()
@@ -352,6 +412,10 @@ class TabelaDialog(wx.Dialog):
 			self._onTrocarChave(self)
 
 	def ao_pressionar_esc(self, event):
+		keyCode = event.GetKeyCode()
+		if keyCode == wx.WXK_F1:
+			self._mostrar_ajuda()
+			return
 		if event.GetKeyCode() == wx.WXK_ESCAPE:
 			self.Close()
 		else:
