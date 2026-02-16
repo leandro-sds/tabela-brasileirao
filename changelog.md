@@ -8,3 +8,6 @@
 
 ## [2026.2.10]
 - Adicionada a função **ajuda** na tecla **F1**.
+
+## [2026.2.16]
+- Ajustada a compatibilidade com **NVDA 2025.3.3**.
