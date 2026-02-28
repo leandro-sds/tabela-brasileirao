@@ -9,23 +9,17 @@ import gui
 import time
 import os
 import threading
-import webbrowser
-import base64
-import ctypes
-from ctypes import wintypes
 from logHandler import log
 import addonHandler
 
 addonHandler.initTranslation()
 from gettext import gettext as _
 
-CACHE_TTL_SECONDS = 1800
+CACHE_TTL_SECONDS = 1800  # 30 min
 HTTP_TIMEOUT_SECONDS = 12
 LOADING_BEEP_INTERVAL_MS = 1800
 
-# Chave gratuita liberada pela API Futebol para uso no add-on
-FREE_API_KEY = "live_1be3551b4e1eb7e7eb355a2824b9fa"
-WIDGET_URL = "https://widget.api-futebol.com.br/render/widget_2d27f839ac107d06"
+REMOTE_JSON_URL = "https://www.sentidodabola.com.br/tabela/cache_tabela.json"
 
 
 def _safe_makedirs(path: str) -> str:
@@ -46,100 +40,12 @@ def _read_json(path: str):
 		return None
 
 
-def _write_json_atomic(path: str, data):
+def _write_json_atomic(path: str, data) -> None:
 	tmp = f"{path}.tmp"
 	with open(tmp, "w", encoding="utf-8") as f:
 		json.dump(data, f, ensure_ascii=False)
 	os.replace(tmp, path)
 
-
-class DATA_BLOB(ctypes.Structure):
-	_fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_byte))]
-
-
-crypt32 = ctypes.WinDLL("crypt32", use_last_error=True)
-kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-
-crypt32.CryptProtectData.argtypes = [
-	ctypes.POINTER(DATA_BLOB), wintypes.LPCWSTR,
-	ctypes.POINTER(DATA_BLOB), ctypes.c_void_p,
-	ctypes.c_void_p, wintypes.DWORD,
-	ctypes.POINTER(DATA_BLOB)
-]
-crypt32.CryptProtectData.restype = wintypes.BOOL
-
-crypt32.CryptUnprotectData.argtypes = [
-	ctypes.POINTER(DATA_BLOB), ctypes.POINTER(wintypes.LPWSTR),
-	ctypes.POINTER(DATA_BLOB), ctypes.c_void_p,
-	ctypes.c_void_p, wintypes.DWORD,
-	ctypes.POINTER(DATA_BLOB)
-]
-crypt32.CryptUnprotectData.restype = wintypes.BOOL
-
-kernel32.LocalFree.argtypes = [ctypes.c_void_p]
-kernel32.LocalFree.restype = ctypes.c_void_p
-
-
-def _dpapi_protect(plaintext: str) -> str:
-	if not isinstance(plaintext, str) or not plaintext:
-		return ""
-	data = plaintext.encode("utf-8")
-	in_blob = DATA_BLOB(len(data), (ctypes.c_byte * len(data)).from_buffer_copy(data))
-	out_blob = DATA_BLOB()
-	if not crypt32.CryptProtectData(ctypes.byref(in_blob), "NVDA Add-on API Key", None, None, None, 0, ctypes.byref(out_blob)):
-		raise OSError(ctypes.get_last_error())
-	try:
-		encrypted = ctypes.string_at(out_blob.pbData, out_blob.cbData)
-		return "dpapi:" + base64.b64encode(encrypted).decode("ascii")
-	finally:
-		kernel32.LocalFree(out_blob.pbData)
-
-
-def _dpapi_unprotect(protected: str) -> str:
-	if not isinstance(protected, str) or not protected:
-		return ""
-	if protected.startswith("dpapi:"):
-		protected = protected[6:]
-	enc = base64.b64decode(protected.encode("ascii"))
-	in_blob = DATA_BLOB(len(enc), (ctypes.c_byte * len(enc)).from_buffer_copy(enc))
-	out_blob = DATA_BLOB()
-	desc = wintypes.LPWSTR()
-	if not crypt32.CryptUnprotectData(ctypes.byref(in_blob), ctypes.byref(desc), None, None, None, 0, ctypes.byref(out_blob)):
-		raise OSError(ctypes.get_last_error())
-	try:
-		plaintext = ctypes.string_at(out_blob.pbData, out_blob.cbData).decode("utf-8", errors="strict")
-		return plaintext
-	finally:
-		if desc:
-			kernel32.LocalFree(desc)
-		kernel32.LocalFree(out_blob.pbData)
-
-
-
-
-def _extract_http_error_detail(err):
-	try:
-		body = err.read()
-	except Exception:
-		return ""
-	try:
-		text = body.decode("utf-8", errors="replace") if isinstance(body, (bytes, bytearray)) else str(body)
-	except Exception:
-		return ""
-	text = (text or "").strip()
-	if not text:
-		return ""
-	try:
-		obj = json.loads(text)
-		if isinstance(obj, dict):
-			for k in ("message", "mensagem", "erro", "error", "detail", "details"):
-				val = obj.get(k)
-				if isinstance(val, str) and val.strip():
-					return val.strip()
-			return json.dumps(obj, ensure_ascii=False)
-	except Exception:
-		pass
-	return text
 
 try:
 	import config
@@ -148,110 +54,34 @@ except Exception:
 	BASE_DIR = os.path.join(os.environ.get("APPDATA", ""), "nvda", "tabela_futebol_config")
 
 BASE_DIR = _safe_makedirs(BASE_DIR)
-CONFIG_FILE = os.path.join(BASE_DIR, "settings.json")
 CACHE_FILE = os.path.join(BASE_DIR, "cache_tabela.json")
 
-def _read_settings():
-	cfg = _read_json(CONFIG_FILE)
-	return cfg if isinstance(cfg, dict) else {}
 
-def _write_settings(cfg: dict):
-	try:
-		_write_json_atomic(CONFIG_FILE, cfg if isinstance(cfg, dict) else {})
-	except Exception:
-		log.exception("Falha ao salvar configurações")
-
-
-class ConfigDialog(wx.Dialog):
-	def __init__(self, parent, initialValue=""):
-		super(ConfigDialog, self).__init__(
-			parent,
-			title=_("Configurar chave da API Futebol"),
-			style=wx.DEFAULT_DIALOG_STYLE | wx.MAXIMIZE_BOX,
+class ErrorDialog(wx.MessageDialog):
+	def __init__(self, parent=None):
+		super().__init__(
+			parent or gui.mainFrame,
+			_("Não foi possível carregar os dados da tabela.\nTente mais tarde."),
+			_("Tabela do Brasileirão"),
+			wx.OK | wx.ICON_WARNING
 		)
-		sizer = wx.BoxSizer(wx.VERTICAL)
-		sizer.Add(
-			wx.StaticText(self, label=_("Cole sua chave (live_...) abaixo:")),
-			0,
-			wx.ALL,
-			10,
-		)
-		self.txt_chave = wx.TextCtrl(self, size=(500, -1), value=initialValue or "")
-		sizer.Add(self.txt_chave, 0, wx.EXPAND | wx.ALL, 10)
-		btn_sizer = self.CreateButtonSizer(wx.OK | wx.CANCEL)
-		sizer.Add(btn_sizer, 0, wx.ALIGN_CENTER | wx.ALL, 10)
-		self.SetSizer(sizer)
-		self.Maximize(True)
-		self.Raise()
-		self.txt_chave.SetFocus()
-
-class ErrorDetailsDialog(wx.Dialog):
-	def __init__(self, parent, summary: str, details: str):
-		super(ErrorDetailsDialog, self).__init__(
-			parent,
-			title=_("Detalhes do erro"),
-			style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER | wx.MAXIMIZE_BOX,
-		)
-		mainSizer = wx.BoxSizer(wx.VERTICAL)
-
-		lbl = wx.StaticText(self, label=summary or "")
-		mainSizer.Add(lbl, 0, wx.EXPAND | wx.ALL, 10)
-
-		self.txt = wx.TextCtrl(
-			self,
-			style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2 | wx.HSCROLL,
-			value=details or "",
-			size=(820, 420),
-		)
-		mainSizer.Add(self.txt, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
-
-		btnSizer = wx.BoxSizer(wx.HORIZONTAL)
-		btnSizer.AddStretchSpacer(1)
-		self.btnCopy = wx.Button(self, wx.ID_ANY, _("Copiar detalhes do erro"))
-		self.btnOk = wx.Button(self, wx.ID_OK, _("OK"))
-		btnSizer.Add(self.btnCopy, 0, wx.RIGHT, 8)
-		btnSizer.Add(self.btnOk, 0)
-		mainSizer.Add(btnSizer, 0, wx.EXPAND | wx.ALL, 10)
-
-		self.btnCopy.Bind(wx.EVT_BUTTON, self._onCopy)
-
-		self.SetSizer(mainSizer)
-		self.Maximize(True)
-		self.Raise()
-		self.txt.SetFocus()
-
-	def _onCopy(self, event):
-		try:
-			if wx.TheClipboard.Open():
-				try:
-					data = wx.TextDataObject(self.txt.GetValue() or "")
-					wx.TheClipboard.SetData(data)
-					wx.TheClipboard.Flush()
-					ui.message(_("Detalhes copiados."))
-				finally:
-					wx.TheClipboard.Close()
-		except Exception:
-			log.exception("Falha ao copiar detalhes do erro")
-			ui.message(_("Não foi possível copiar os detalhes."))
 
 
 class TabelaDialog(wx.Dialog):
-	def __init__(self, dados, onTrocarChave=None, onAbrirWidget=None):
+	def __init__(self, dados, onForceRefresh=None):
 		super(TabelaDialog, self).__init__(
 			gui.mainFrame,
 			title=_("Classificação do Brasileirão — Série A"),
 			style=wx.DEFAULT_DIALOG_STYLE | wx.MAXIMIZE_BOX | wx.RESIZE_BORDER,
 		)
 		self.dados = dados or []
-		self._onTrocarChave = onTrocarChave
-		self._onAbrirWidget = onAbrirWidget
+		self._onForceRefresh = onForceRefresh
 
 		mainSizer = wx.BoxSizer(wx.VERTICAL)
 
-		rotuloFonte = wx.StaticText(self, label=_("Fonte: www.api-futebol.com.br"))
+		rotuloFonte = wx.StaticText(self, label=_("Fonte: www.sentidodabola.com.br"))
 		mainSizer.Add(rotuloFonte, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
 
-		# Painel para dar “margem interna” em volta da lista (evita ficar colada na borda)
 		listPanel = wx.Panel(self)
 		listSizer = wx.BoxSizer(wx.VERTICAL)
 		self.lista = wx.ListCtrl(listPanel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.BORDER_SIMPLE)
@@ -261,7 +91,6 @@ class TabelaDialog(wx.Dialog):
 
 		self.lista.InsertColumn(0, _("Tabela de classificação"), width=900)
 
-		# Fonte um pouco maior para melhorar a leitura (aumenta também a altura das linhas)
 		try:
 			f = self.lista.GetFont()
 			pt = f.GetPointSize()
@@ -271,14 +100,8 @@ class TabelaDialog(wx.Dialog):
 		except Exception:
 			pass
 
-		for i, item in enumerate(self.dados):
-			equipe = item.get("equipe") or item.get("time") or {}
-			nome = equipe.get("nome_popular") or _("Time")
-			pos = item.get("posicao", "?")
-			pts = item.get("pontos", 0)
-			self.lista.InsertItem(i, f"{pos}º {nome} - {pts} " + _("pontos"))
+		self._popular_lista()
 
-		# Zebra leve
 		try:
 			branco = wx.Colour(255, 255, 255)
 			cinza = wx.Colour(245, 245, 245)
@@ -287,37 +110,35 @@ class TabelaDialog(wx.Dialog):
 		except Exception:
 			pass
 
-		# Ajusta a largura da coluna para ocupar a janela (reduz o “vazio” à direita)
 		self.lista.Bind(wx.EVT_SIZE, self._ao_redimensionar_lista)
 		self._ajustar_largura_coluna()
 
-		# Teclas de navegação / atalhos
 		self.lista.Bind(wx.EVT_KEY_DOWN, self.ao_pressionar_setas)
 		self.lista.Bind(wx.EVT_CHAR, self.ao_pressionar_letras)
 		self.Bind(wx.EVT_CHAR_HOOK, self.ao_pressionar_esc)
 
-		# Botões no canto inferior direito, com espaçamento igual
+		# Botões
 		btnSizer = wx.BoxSizer(wx.HORIZONTAL)
+
+		self.btnAtualizar = wx.Button(self, wx.ID_ANY, _("Atualizar tabela"))
+		btnSizer.Add(self.btnAtualizar, 0)
 		btnSizer.AddStretchSpacer(1)
 
-		self.btnWidget = wx.Button(self, wx.ID_ANY, _("Ver no navegador"))
-		self.btnTrocar = wx.Button(self, wx.ID_ANY, _("Trocar chave API"))
 		self.btnFechar = wx.Button(self, wx.ID_CANCEL, _("Fechar"))
-
-		# Deixar o “Fechar” mais discreto (quando disponível)
 		try:
 			self.btnFechar.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
+			self.btnAtualizar.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 		except Exception:
 			pass
 
-		btnSizer.Add(self.btnWidget, 0, wx.RIGHT, 8)
-		btnSizer.Add(self.btnTrocar, 0, wx.RIGHT, 8)
 		btnSizer.Add(self.btnFechar, 0)
-
 		mainSizer.Add(btnSizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
-		self.btnWidget.Bind(wx.EVT_BUTTON, self._ao_abrir_widget)
-		self.btnTrocar.Bind(wx.EVT_BUTTON, self._ao_trocar_chave)
+		self.btnAtualizar.Bind(wx.EVT_BUTTON, self._on_click_atualizar)
+
+		# Se não houver callback, desabilita o botão
+		if not callable(self._onForceRefresh):
+			self.btnAtualizar.Disable()
 
 		self.SetSizer(mainSizer)
 		self.Maximize(True)
@@ -331,6 +152,70 @@ class TabelaDialog(wx.Dialog):
 		else:
 			self.lista.SetFocus()
 
+	def _popular_lista(self):
+		try:
+			self.lista.DeleteAllItems()
+		except Exception:
+			pass
+
+		for i, item in enumerate(self.dados):
+			equipe = item.get("equipe") or item.get("time") or {}
+			nome = equipe.get("nome_popular") or _("Time")
+			pos = item.get("posicao", "?")
+			pts = item.get("pontos", 0)
+			self.lista.InsertItem(i, f"{pos}º {nome} - {pts} " + _("pontos"))
+
+	def _atualizar_dados_na_tela(self, novos_dados):
+		self.dados = novos_dados or []
+		self._popular_lista()
+		self._ajustar_largura_coluna()
+
+		# seleciona a primeira linha para leitura imediata
+		if self.lista.GetItemCount() > 0:
+			self.lista.SetFocus()
+			self.lista.SetItemState(0, wx.LIST_STATE_SELECTED, wx.LIST_STATE_SELECTED)
+			self.lista.EnsureVisible(0)
+
+	def _set_atualizando(self, updating: bool):
+		try:
+			self.btnAtualizar.Enable(not updating)
+			self.btnFechar.Enable(not updating)
+			if updating:
+				self.btnAtualizar.SetLabel(_("Atualizando..."))
+			else:
+				self.btnAtualizar.SetLabel(_("Atualizar agora"))
+		except Exception:
+			pass
+
+	def _on_click_atualizar(self, event):
+		if not callable(self._onForceRefresh):
+			return
+
+		self._set_atualizando(True)
+		tones.beep(880, 60)
+		ui.message(_("Atualizando dados da tabela..."))
+
+		def ok(novos_dados):
+			self._set_atualizando(False)
+			self._atualizar_dados_na_tela(novos_dados)
+			tones.beep(660, 40)
+			ui.message(_("Tabela atualizada."))
+
+		def fail():
+			self._set_atualizando(False)
+			tones.beep(220, 120)
+			dlg = ErrorDialog(self)
+			try:
+				dlg.ShowModal()
+			finally:
+				dlg.Destroy()
+
+		# Chama o plugin para fazer o download em thread, e devolver ok/fail na UI
+		try:
+			self._onForceRefresh(ok, fail)
+		except Exception:
+			fail()
+
 	def _ajustar_largura_coluna(self):
 		try:
 			w = self.lista.GetClientSize().GetWidth()
@@ -340,7 +225,6 @@ class TabelaDialog(wx.Dialog):
 			pass
 
 	def _mostrar_ajuda(self):
-		# Janela de ajuda sem botão OK; fecha com Esc e volta o foco para a tabela
 		dlg = wx.Dialog(self, title=_("Ajuda"), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
 		texto = wx.TextCtrl(
 			dlg,
@@ -363,11 +247,6 @@ Atalhos para obter dados (time selecionado):
 - C: Gols contra
 - A: Aproveitamento
 
-Caminhando com Tab, você encontrará os botões:
-
-- Trocar chave API: informar uma nova chave
-- Ver no navegador: abrir a visualização web no navegador padrão
-
 Pressione Esc para voltar à tabela.""",
 			style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2,
 		)
@@ -378,8 +257,7 @@ Pressione Esc para voltar à tabela.""",
 		dlg.CentreOnParent()
 
 		def onKey(event):
-			keyCode = event.GetKeyCode()
-			if keyCode == wx.WXK_ESCAPE:
+			if event.GetKeyCode() == wx.WXK_ESCAPE:
 				dlg.EndModal(wx.ID_CANCEL)
 				return
 			event.Skip()
@@ -390,12 +268,8 @@ Pressione Esc para voltar à tabela.""",
 			dlg.ShowModal()
 		finally:
 			dlg.Destroy()
-			# Volta o foco para a lista da tabela, se possível
 			try:
-				if hasattr(self, "lista"):
-					self.lista.SetFocus()
-				else:
-					self.SetFocus()
+				self.lista.SetFocus()
 			except Exception:
 				pass
 
@@ -403,20 +277,12 @@ Pressione Esc para voltar à tabela.""",
 		self._ajustar_largura_coluna()
 		event.Skip()
 
-	def _ao_abrir_widget(self, event):
-		if callable(self._onAbrirWidget):
-			self._onAbrirWidget()
-
-	def _ao_trocar_chave(self, event):
-		if callable(self._onTrocarChave):
-			self._onTrocarChave(self)
-
 	def ao_pressionar_esc(self, event):
 		keyCode = event.GetKeyCode()
 		if keyCode == wx.WXK_F1:
 			self._mostrar_ajuda()
 			return
-		if event.GetKeyCode() == wx.WXK_ESCAPE:
+		if keyCode == wx.WXK_ESCAPE:
 			self.Close()
 		else:
 			event.Skip()
@@ -454,50 +320,59 @@ Pressione Esc para voltar à tabela.""",
 
 		it = self.dados[idx]
 		nome = (it.get("equipe") or it.get("time") or {}).get("nome_popular", _("Time"))
-		mapa = {"V": "vitorias", "E": "empates", "D": "derrotas", "S": "saldo_gols", "J": "jogos", "P": "gols_pro", "C": "gols_contra", "A": "aproveitamento"}
-		nomes = {"V": _("Vitórias"), "E": _("Empates"), "D": _("Derrotas"), "S": _("Saldo"), "J": _("Jogos"), "P": _("Gols pró"), "C": _("Gols contra"), "A": _("Aproveitamento")}
+		mapa = {
+			"V": "vitorias", "E": "empates", "D": "derrotas", "S": "saldo_gols",
+			"J": "jogos", "P": "gols_pro", "C": "gols_contra", "A": "aproveitamento"
+		}
+		nomes = {
+			"V": _("Vitórias"), "E": _("Empates"), "D": _("Derrotas"), "S": _("Saldo"),
+			"J": _("Jogos"), "P": _("Gols pró"), "C": _("Gols contra"), "A": _("Aproveitamento")
+		}
 
-		if tecla in mapa:
-			chave = mapa[tecla]
-			valor = 0
-			if chave == "gols_pro":
-				valor = it.get("gols_pro", it.get("golsPro", it.get("golspro", 0)))
-				ui.message(f"{nome}: {nomes[tecla]} {valor}")
-			elif chave == "gols_contra":
-				valor = it.get("gols_contra", it.get("golsContra", it.get("golscontra", 0)))
-				ui.message(f"{nome}: {nomes[tecla]} {valor}")
-			elif chave == "aproveitamento":
-				valor = it.get("aproveitamento", None)
-				if valor is None:
-					pontos = it.get("pontos", it.get("ponto", 0))
-					jogos = it.get("jogos", 0)
-					try:
-						pontos = float(pontos)
-						jogos = float(jogos)
-					except Exception:
-						pontos = 0.0
-						jogos = 0.0
-					if jogos > 0:
-						valor = (pontos / (jogos * 3.0)) * 100.0
-					else:
-						valor = 0.0
-				try:
-					if isinstance(valor, str):
-						txt = valor.strip()
-						if txt and not txt.endswith("%"):
-							txt = txt + "%"
-						ui.message(f"{nome}: {nomes[tecla]} {txt}")
-					else:
-						pct = float(valor)
-						txt = f"{pct:.1f}".replace(".", ",") + "%"
-						ui.message(f"{nome}: {nomes[tecla]} {txt}")
-				except Exception:
-					ui.message(f"{nome}: {nomes[tecla]} {valor}")
-			else:
-				valor = it.get(chave, 0)
-				ui.message(f"{nome}: {nomes[tecla]} {valor}")
-		else:
+		if tecla not in mapa:
 			event.Skip()
+			return
+
+		chave = mapa[tecla]
+
+		if chave == "gols_pro":
+			valor = it.get("gols_pro", it.get("golsPro", it.get("golspro", 0)))
+			ui.message(f"{nome}: {nomes[tecla]} {valor}")
+			return
+
+		if chave == "gols_contra":
+			valor = it.get("gols_contra", it.get("golsContra", it.get("golscontra", 0)))
+			ui.message(f"{nome}: {nomes[tecla]} {valor}")
+			return
+
+		if chave == "aproveitamento":
+			valor = it.get("aproveitamento", None)
+			if valor is None:
+				pontos = it.get("pontos", it.get("ponto", 0))
+				jogos = it.get("jogos", 0)
+				try:
+					pontos = float(pontos)
+					jogos = float(jogos)
+				except Exception:
+					pontos = 0.0
+					jogos = 0.0
+				valor = (pontos / (jogos * 3.0)) * 100.0 if jogos > 0 else 0.0
+			try:
+				if isinstance(valor, str):
+					txt = valor.strip()
+					if txt and not txt.endswith("%"):
+						txt = txt + "%"
+					ui.message(f"{nome}: {nomes[tecla]} {txt}")
+				else:
+					pct = float(valor)
+					txt = f"{pct:.1f}".replace(".", ",") + "%"
+					ui.message(f"{nome}: {nomes[tecla]} {txt}")
+			except Exception:
+				ui.message(f"{nome}: {nomes[tecla]} {valor}")
+			return
+
+		valor = it.get(chave, 0)
+		ui.message(f"{nome}: {nomes[tecla]} {valor}")
 
 
 class GlobalPlugin(globalPluginHandler.GlobalPlugin):
@@ -535,7 +410,6 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 				_("Abrir a tabela do Brasileirão")
 			)
 			sysTray.Bind(wx.EVT_MENU, self._on_tools_menu_open, self._toolsMenuItemOpen)
-
 		except Exception:
 			log.exception("Falha ao adicionar itens no menu Ferramentas")
 
@@ -544,9 +418,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			mainFrame = getattr(gui, "mainFrame", None)
 			sysTray = getattr(mainFrame, "sysTrayIcon", None) if mainFrame else None
 
-			for item, handler in (
-				(self._toolsMenuItemOpen, self._on_tools_menu_open),
-			):
+			for item, handler in ((self._toolsMenuItemOpen, self._on_tools_menu_open),):
 				if self._toolsMenu and item:
 					try:
 						if sysTray:
@@ -567,7 +439,6 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 	def _on_tools_menu_open(self, event):
 		self.script_tabela(None)
-
 
 	def _start_loading_timer(self):
 		def _start():
@@ -613,53 +484,16 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		except Exception:
 			pass
 
-	def _mostrar_erro(self, resumo: str, detalhes: str):
+	def _mostrar_erro_simples(self):
 		try:
-			resumo = (resumo or "").strip() or _("Ocorreu um erro.")
-			detalhes = (detalhes or "").strip() or resumo
-
-			ui.message(resumo)
-
-			dlg = ErrorDetailsDialog(gui.mainFrame, resumo, detalhes)
+			tones.beep(220, 120)
+			dlg = ErrorDialog(gui.mainFrame)
 			try:
 				dlg.ShowModal()
 			finally:
 				dlg.Destroy()
 		except Exception:
-			log.exception("Falha ao exibir detalhes do erro")
-
-
-	def _mostrar_erro_e_cache(self, resumo: str, detalhes: str, dados_cache, idade_segundos: float):
-		"""Mostra detalhes do erro e, em seguida, abre a tabela com o cache."""
-		try:
-			mins = int(round((idade_segundos or 0) / 60.0))
-			resumo2 = (resumo or "").strip() or _("Ocorreu um erro.")
-			if mins <= 0:
-				resumo2 = resumo2 + " " + _("Mostrando dados do cache.")
-			else:
-				resumo2 = resumo2 + " " + _("Mostrando dados do cache ({mins} min).").format(mins=mins)
-			self._mostrar_erro(resumo2, detalhes)
-			self._mostrar_tabela(dados_cache)
-		except Exception:
-			log.exception("Falha ao exibir erro e cache")
-			try:
-				self._mostrar_tabela(dados_cache)
-			except Exception:
-				pass
-
-	def _mostrar_tabela(self, dados):
-		try:
-			TabelaDialog(dados, onTrocarChave=self._trocar_chave_api, onAbrirWidget=self._abrir_widget).ShowModal()
-		except Exception:
-			log.exception("Falha ao exibir diálogo de tabela")
-	def _abrir_widget(self):
-		try:
-			ui.message(_("Abrindo no navegador."))
-			webbrowser.open(WIDGET_URL)
-		except Exception:
-			log.exception("Falha ao abrir widget")
-			ui.message(_("Não foi possível abrir o widget."))
-
+			ui.message(_("Não foi possível carregar os dados da tabela. Tente mais tarde."))
 
 	def _carregar_cache(self):
 		cache = _read_json(CACHE_FILE)
@@ -669,13 +503,11 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		dados = cache.get("dados")
 		if not isinstance(timestamp, (int, float)) or not isinstance(dados, list):
 			return None
-		if (time.time() - timestamp) >= CACHE_TTL_SECONDS:
+		if (time.time() - float(timestamp)) >= CACHE_TTL_SECONDS:
 			return None
 		return dados
 
-
 	def _carregar_cache_stale(self):
-		"""Carrega o cache mesmo expirado. Retorna (dados, idadeSegundos) ou (None, None)."""
 		cache = _read_json(CACHE_FILE)
 		if not isinstance(cache, dict):
 			return (None, None)
@@ -688,212 +520,82 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			idade = 0
 		return (dados, idade)
 
-	def _carregar_token(self):
-		cfg = _read_settings()
-		if cfg.get("use_free_key") is True:
-			return FREE_API_KEY
-		val = cfg.get("api_key")
-		if isinstance(val, str) and val.strip():
-			val = val.strip()
-			try:
-				if val.startswith("dpapi:"):
-					return _dpapi_unprotect(val)
-				return val
-			except Exception:
-				log.exception("Falha ao descriptografar token")
-				return None
-		return None
-
-	def _salvar_token(self, token: str):
-		try:
-			token = (token or "").strip()
-			if not token:
-				return False
-			protegido = _dpapi_protect(token)
-			cfg = _read_settings()
-			cfg["api_key"] = protegido
-			cfg["use_free_key"] = False
-			cfg["setup_done"] = True
-			_write_settings(cfg)
-			return True
-		except Exception:
-			log.exception("Falha ao salvar token")
-			return False
-
-	def _ativar_chave_gratis(self):
-		try:
-			cfg = _read_settings()
-			cfg["use_free_key"] = True
-			cfg["setup_done"] = True
-			_write_settings(cfg)
-			self._invalidar_cache()
-			return True
-		except Exception:
-			log.exception("Falha ao ativar chave grátis")
-			return False
-
-	def _invalidar_cache(self):
-		try:
-			if os.path.isfile(CACHE_FILE):
-				os.remove(CACHE_FILE)
-		except Exception:
-			pass
-
-
-	def _prompt_chave_api(self, parent):
-		dlg = ConfigDialog(parent)
-		try:
-			if dlg.ShowModal() != wx.ID_OK:
-				return False
-			chave = (dlg.txt_chave.GetValue() or "").strip()
-			if not chave:
-				return False
-			if not self._salvar_token(chave):
-				ui.message(_("Não foi possível salvar a chave."))
-				return False
-			self._invalidar_cache()
-		finally:
-			dlg.Destroy()
-
-		msg = wx.MessageDialog(
-			parent if parent else gui.mainFrame,
-			_("Chave adicionada!"),
-			_("API Futebol"),
-			wx.OK | wx.ICON_INFORMATION
-		)
-		try:
-			msg.ShowModal()
-		finally:
-			msg.Destroy()
-
-		wx.CallAfter(lambda: self.script_tabela(None))
-		return True
-
-
-
-	def _trocar_chave_api(self, tabelaDlg):
-		try:
-			if tabelaDlg:
-				try:
-					tabelaDlg.Close()
-				except Exception:
-					pass
-			parent = gui.mainFrame
-			self._prompt_chave_api(parent)
-		except Exception:
-			log.exception("Falha ao trocar chave")
-
-
 	def _salvar_cache(self, dados):
 		try:
 			_write_json_atomic(CACHE_FILE, {"timestamp": time.time(), "dados": dados})
 		except Exception:
 			log.exception("Falha ao salvar cache")
 
-	def _buscar_tabela_em_thread(self, token: str):
+	def _baixar_json_em_thread(self, on_ok, on_fail):
+		"""Baixa e valida o JSON em thread e chama callbacks na UI."""
 		def worker():
 			try:
-				url = "https://api.api-futebol.com.br/v1/campeonatos/10/tabela"
-				headers = {
-					"Authorization": f"Bearer {token}",
-					"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-					"Accept": "application/json",
-					"Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-				}
-				req = urllib.request.Request(url, headers=headers)
+				req = urllib.request.Request(
+					REMOTE_JSON_URL,
+					headers={
+						"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+						"Accept": "application/json",
+						"Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+					},
+				)
 				with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SECONDS) as resp:
 					payload = resp.read().decode("utf-8", errors="replace")
-				dados = json.loads(payload)
-				if not isinstance(dados, list):
-					raise ValueError("Resposta inesperada da API")
+
+				obj = json.loads(payload)
+
+				if isinstance(obj, dict) and isinstance(obj.get("dados"), list):
+					dados = obj.get("dados")
+				elif isinstance(obj, list):
+					dados = obj
+				else:
+					raise ValueError("JSON inválido")
+
 				self._salvar_cache(dados)
-				wx.CallAfter(lambda: self._mostrar_tabela(dados))
-			except urllib.error.HTTPError as e:
-				log.exception("HTTPError ao consultar API")
-				code = getattr(e, "code", None)
-				reason = getattr(e, "reason", "")
-				detail = _extract_http_error_detail(e)
-				if isinstance(detail, str):
-					detail = detail.strip()
+				wx.CallAfter(on_ok, dados)
 
-				snippet = ""
-				if detail:
-					snippet = detail.replace("\r", " ").replace("\n", " ").strip()
-					if len(snippet) > 180:
-						snippet = snippet[:180].rstrip() + "…"
+			except Exception:
+				wx.CallAfter(on_fail)
 
-				cloud = (detail or "").lower()
-				if ("error 1010" in cloud) or (("1010" in cloud) and ("cloudflare" in cloud or "access denied" in cloud)):
-					resumo = _("Bloqueado pelo Cloudflare (erro 1010). Tente outra rede (por exemplo, hotspot do celular) ou use \"Ver no navegador\".")
-					detalhes = _("URL: {url}\nHTTP: {code}\nMotivo: {reason}\n\nResposta:\n{detail}\n").format(
-						url=url, code=code or "", reason=reason or "", detail=detail or ""
-					)
-					dados_cache, idade = self._carregar_cache_stale()
-					if dados_cache is not None:
-						wx.CallAfter(lambda: self._mostrar_erro_e_cache(resumo, detalhes, dados_cache, idade))
-					else:
-						wx.CallAfter(lambda: self._mostrar_erro(resumo, detalhes))
-					return
-
-				if code == 401:
-					resumo = _("Chave inválida ou expirada (erro 401). Se você estiver usando a chave grátis, ela pode ter atingido o limite. Use \"Trocar chave API\" ou \"Ver no navegador\".")
-				elif code == 403:
-					resumo = _("Acesso negado (erro 403). Se você estiver usando a chave grátis, ela pode ter atingido o limite ou sido bloqueada. Use \"Trocar chave API\" ou \"Ver no navegador\".")
-				elif code == 429:
-					resumo = _("Muitas requisições (erro 429). Se você estiver usando a chave grátis, ela pode ter atingido o limite. Tente novamente mais tarde ou use \"Trocar chave API\".")
-				elif isinstance(code, int) and 500 <= code <= 599:
-					resumo = _("A API está instável no momento. Tente novamente mais tarde.")
-				else:
-					resumo = _("Erro HTTP {code}.").format(code=code or "")
-
-				if snippet:
-					resumo = resumo + " " + snippet
-
-				detalhes = _("URL: {url}\nHTTP: {code}\nMotivo: {reason}\n\nResposta:\n{detail}\n").format(
-					url=url, code=code or "", reason=reason or "", detail=detail or ""
-				)
-				dados_cache, idade = self._carregar_cache_stale()
-				if dados_cache is not None:
-					wx.CallAfter(lambda: self._mostrar_erro_e_cache(resumo, detalhes, dados_cache, idade))
-				else:
-					wx.CallAfter(lambda: self._mostrar_erro(resumo, detalhes))
-			except urllib.error.URLError as e:
-				log.exception("URLError ao consultar API")
-				reason = getattr(e, "reason", "")
-				resumo = _("Sem conexão com a internet ou servidor inacessível.")
-				if reason:
-					s = str(reason).replace("\r", " ").replace("\n", " ").strip()
-					if len(s) > 160:
-						s = s[:160].rstrip() + "…"
-					resumo = resumo + " " + s
-				detalhes = _("URL: {url}\nErro: {err}\n").format(url=url, err=str(reason or e))
-				dados_cache, idade = self._carregar_cache_stale()
-				if dados_cache is not None:
-					wx.CallAfter(lambda: self._mostrar_erro_e_cache(resumo, detalhes, dados_cache, idade))
-				else:
-					wx.CallAfter(lambda: self._mostrar_erro(resumo, detalhes))
-			except Exception as e:
-				log.exception("Erro ao consultar API")
-				resumo = _("Erro ao buscar dados. Tente novamente.")
-				detalhes = _("URL: {url}\nErro: {err}\n").format(url=url, err=repr(e))
-				dados_cache, idade = self._carregar_cache_stale()
-				if dados_cache is not None:
-					wx.CallAfter(lambda: self._mostrar_erro_e_cache(resumo, detalhes, dados_cache, idade))
-				else:
-					wx.CallAfter(lambda: self._mostrar_erro(resumo, detalhes))
 			finally:
 				self._fetchInProgress = False
 				self._stop_loading_timer()
 
 		self._fetchInProgress = True
 		self._start_loading_timer()
-		t = threading.Thread(target=worker, name="TabelaBrasileiraoFetch", daemon=True)
-		t.start()
+		threading.Thread(target=worker, name="TabelaBrasileiraoFetch", daemon=True).start()
+
+	def _mostrar_tabela(self, dados):
+		try:
+			dlg = TabelaDialog(dados, onForceRefresh=self._force_refresh_from_dialog)
+			dlg.ShowModal()
+		except Exception:
+			log.exception("Falha ao exibir diálogo de tabela")
+
+	def _force_refresh_from_dialog(self, ok, fail):
+		"""Chamado pelo botão 'Atualizar agora' dentro do diálogo."""
+		if self._fetchInProgress:
+			ui.message(_("Aguarde, já estou buscando dados."))
+			fail()
+			return
+		self._baixar_json_em_thread(ok, fail)
+
+	def _buscar_tabela_em_thread(self):
+		def ok(dados):
+			self._mostrar_tabela(dados)
+
+		def fail():
+			dados_cache, _idade = self._carregar_cache_stale()
+			if dados_cache is not None:
+				ui.message(_("Mostrando dados do cache."))
+				self._mostrar_tabela(dados_cache)
+			else:
+				self._mostrar_erro_simples()
+
+		self._baixar_json_em_thread(ok, fail)
 
 	def script_tabela(self, gesture):
-		"""Abrir a tabela do Brasileirão"""
 		if self._fetchInProgress:
-			ui.message(_("Aguarde, buscando dados na API Futebol."))
+			ui.message(_("Aguarde, buscando dados."))
 			return
 
 		dados_cache = self._carregar_cache()
@@ -902,41 +604,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			wx.CallAfter(lambda: self._mostrar_tabela(dados_cache))
 			return
 
-		token = self._carregar_token()
-		if not token:
-			cfg = _read_settings()
-			if cfg.get("setup_done") is not True:
-				def ask_first_run():
-					dlg = wx.MessageDialog(
-						gui.mainFrame,
-						_("Deseja usar a chave grátis da API Futebol?"),
-						_("API Futebol"),
-						wx.YES_NO | wx.ICON_QUESTION
-					)
-					try:
-						res = dlg.ShowModal()
-					finally:
-						dlg.Destroy()
-
-					if res == wx.ID_YES:
-						if self._ativar_chave_gratis():
-							wx.CallAfter(lambda: self.script_tabela(None))
-						else:
-							ui.message(_("Não foi possível ativar a chave grátis."))
-					else:
-						wx.CallAfter(lambda: self._prompt_chave_api(gui.mainFrame))
-
-				tones.beep(220, 200)
-				wx.CallAfter(ask_first_run)
-				return
-
-			tones.beep(220, 200)
-			ui.message(_("Configuração necessária."))
-			wx.CallAfter(lambda: self._prompt_chave_api(gui.mainFrame))
-			return
-
 		tones.beep(880, 50)
-		ui.message(_("Buscando dados na API Futebol."))
-		self._buscar_tabela_em_thread(token)
+		ui.message(_("Buscando dados da tabela."))
+		self._buscar_tabela_em_thread()
 
 	__gestures = {"kb:control+shift+t": "tabela"}

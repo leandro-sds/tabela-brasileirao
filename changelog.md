@@ -11,3 +11,6 @@
 
 ## [2026.2.16]
 - Ajustada a compatibilidade com **NVDA 2025.3.3**.
+
+## [2026.2.28]
+- Encerrada a parceria com api-futebol. Os dados agora são extraídos de www.sentidodabola.com.br.**.
