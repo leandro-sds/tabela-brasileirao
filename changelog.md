@@ -1,5 +1,10 @@
 # 📜 Changelog
 
+## [2026.03.06]
+- Adicionados os atalhos **Ctrl + C**, que copia a classificação do time selecionado.
+- **Ctrl + A** copia toda a tabela de forma simplificada.
+- **Ctrl + S** salva a tabela atual no formato TXT.
+
 ## [2026.3.03]
 - Adicionado suporte à **Série B** (além da Série A).
 - Incluídos botões **Tabela Série A** e **Tabela Série B** na janela.
