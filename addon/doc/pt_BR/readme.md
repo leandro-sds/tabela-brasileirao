@@ -4,37 +4,59 @@
 
 ---
 
-## ⚽ Descrição
+## ⚽ O que é
 
-O **Tabela Brasileirão** é um complemento para o NVDA que permite acompanhar a **classificação do Brasileirão Série A** com rapidez e acessibilidade.
+O **Tabela Brasileirão** é um complemento para o NVDA que permite consultar, com acessibilidade, a **classificação do Brasileirão Série A e Série B**.
 
-Os dados são obtidos através do **Sentido da Bola**.
-
----
-
-## ✅ Recursos
-
-- Atalho para abrir a tabela (**configurável** em *Preferências → Definir comandos*).
-- Lista acessível, com bips ao chegar no início/fim.
-- Atalhos rápidos dentro da tabela:
-  - **V** = Vitórias
-  - **E** = Empates
-  - **D** = Derrotas
-  - **S** = Saldo de gols
-  - **J** = Jogos
-  - **P** = Gols pró
-  - **C** = Gols contra
-- **Cache inteligente de 30 minutos** (economiza dados e abre mais rápido).
-- Botão **Trocar chave API** para colar uma nova chave, quando necessário.
-- Botão **Ver no navegador** para abrir uma visualização web no navegador padrão.
+Os dados são obtidos em **www.sentidodabola.com.br**.
 
 ---
 
-## ⌨️ Atalho para abrir a tabela
+## ✅ Como usar
 
-- Atalho padrão: **Control + Shift + T**
+### Abrir a tabela
+- Atalho padrão: **Control + Shift + T** (abre a **Série A**)
 
-### Personalizar o atalho
+### Alternar entre Série A e Série B
+Dentro da janela da tabela, use os botões:
+- **Tabela Série A**
+- **Tabela Série B**
+
+> Ao trocar de série, o complemento fecha a janela atual e abre a nova (sem “voltar níveis”).
+
+### Atualizar a tabela
+Dentro da janela, use o botão:
+- **Atualizar tabela**
+
+---
+
+## ⌨️ Atalhos dentro da tabela
+
+Na lista de classificação, você pode pressionar:
+
+- **Setas para cima/baixo**: navega na lista (com bips ao chegar no início/fim)
+- **F1**: abre a ajuda com os atalhos
+- **V**: Vitórias
+- **E**: Empates
+- **D**: Derrotas
+- **S**: Saldo de gols
+- **J**: Jogos
+- **P**: Gols pró
+- **C**: Gols contra
+- **A**: Aproveitamento
+
+---
+
+## 💾 Cache (mais rápido e economiza dados)
+
+O complemento usa cache por **30 minutos** para abrir mais rápido:
+- Cache separado para **Série A** e **Série B**
+
+Se quiser forçar a atualização imediata, use o botão **Atualizar tabela**.
+
+---
+
+## ⚙️ Personalizar o atalho
 
 Você pode alterar o atalho em:
 

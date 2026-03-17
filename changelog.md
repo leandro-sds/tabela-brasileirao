@@ -1,5 +1,7 @@
 # 📜 Changelog
 
+## [2026.03.17]
+- Adicionado um botão para consultar os próximos confrontos, bem como o atalho: Control+Shift+J.
 ## [2026.03.06]
 - Adicionados os atalhos **Ctrl + C**, que copia a classificação do time selecionado.
 - **Ctrl + A** copia toda a tabela de forma simplificada.
