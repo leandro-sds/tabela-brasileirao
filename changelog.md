@@ -1,5 +1,8 @@
 # 📜 Changelog
 
+## [2026.4.01]
+- Removido suporte à **Série B** (Mantido apenas Série A).
+
 ## [2026.03.17]
 - Adicionado um botão para consultar os próximos confrontos, bem como o atalho: Control+Shift+J.
 ## [2026.03.06]

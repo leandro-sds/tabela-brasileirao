@@ -20,7 +20,6 @@ HTTP_TIMEOUT_SECONDS = 12
 LOADING_BEEP_INTERVAL_MS = 1800
 
 REMOTE_JSON_URL_A_A = "https://www.sentidodabola.com.br/tabela/cache_tabela_A.json"
-REMOTE_JSON_URL_A_B = "https://www.sentidodabola.com.br/tabela/cache_tabela_B.json"
 REMOTE_JOGOS_URL = "https://www.sentidodabola.com.br/tabela/proximos_jogos.txt"
 
 
@@ -57,7 +56,6 @@ except Exception:
 
 BASE_DIR = _safe_makedirs(BASE_DIR)
 CACHE_FILE_A = os.path.join(BASE_DIR, "cache_tabela_A.json")
-CACHE_FILE_B = os.path.join(BASE_DIR, "cache_tabela_B.json")
 CACHE_FILE_JOGOS = os.path.join(BASE_DIR, "cache_proximos_jogos.txt")
 
 
@@ -173,17 +171,15 @@ class JogosDialog(wx.Dialog):
 
 
 class TabelaDialog(wx.Dialog):
-	def __init__(self, dados, serie="A", onForceRefresh=None, onOpenSerieA=None, onOpenSerieB=None, onOpenJogos=None):
+	def __init__(self, dados, onForceRefresh=None, onOpenJogos=None):
 		super(TabelaDialog, self).__init__(
 			gui.mainFrame,
-			title=_("Classificação do Brasileirão — Série B") if (serie or "").upper() == "B" else _("Classificação do Brasileirão — Série A"),
+			title=_("Classificação do Brasileirão — Série A"),
 			style=wx.DEFAULT_DIALOG_STYLE | wx.MAXIMIZE_BOX | wx.RESIZE_BORDER,
 		)
 		self.dados = dados or []
-		self.serie = (serie or "A").upper()
+		self.serie = "A"
 		self._onForceRefresh = onForceRefresh
-		self._onOpenSerieA = onOpenSerieA
-		self._onOpenSerieB = onOpenSerieB
 		self._onOpenJogos = onOpenJogos
 
 		mainSizer = wx.BoxSizer(wx.VERTICAL)
@@ -231,12 +227,6 @@ class TabelaDialog(wx.Dialog):
 		self.btnAtualizar = wx.Button(self, wx.ID_ANY, _("Atualizar tabela"))
 		btnSizer.Add(self.btnAtualizar, 0)
 
-		self.btnSerieA = wx.Button(self, wx.ID_ANY, _("Tabela Série A"))
-		btnSizer.Add(self.btnSerieA, 0)
-
-		self.btnSerieB = wx.Button(self, wx.ID_ANY, _("Tabela Série B"))
-		btnSizer.Add(self.btnSerieB, 0)
-
 		self.btnJogos = wx.Button(self, wx.ID_ANY, _("Próximos Jogos"))
 		btnSizer.Add(self.btnJogos, 0)
 
@@ -262,24 +252,19 @@ class TabelaDialog(wx.Dialog):
 		mainSizer.Add(btnSizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
 		self.btnAtualizar.Bind(wx.EVT_BUTTON, self._on_click_atualizar)
-		self.btnSerieA.Bind(wx.EVT_BUTTON, self._on_click_serie_a)
-		self.btnSerieB.Bind(wx.EVT_BUTTON, self._on_click_serie_b)
 		self.btnJogos.Bind(wx.EVT_BUTTON, self._on_click_jogos)
 		self.btnCopiar.Bind(wx.EVT_BUTTON, lambda evt: self._copiar_tabela_para_area_de_transferencia())
 		self.btnSalvar.Bind(wx.EVT_BUTTON, lambda evt: self._salvar_tabela_em_txt())
 
 		try:
-			if self.serie == "A":
-				self.btnSerieA.Disable()
-			else:
-				self.btnSerieB.Disable()
+			pass
 		except Exception:
 			pass
 
 		if not callable(self._onForceRefresh):
 			self.btnAtualizar.Disable()
 
-		if not callable(self._onOpenJogos) or self.serie == "B":
+		if not callable(self._onOpenJogos):
 			self.btnJogos.Disable()
 
 		self.SetSizer(mainSizer)
@@ -355,20 +340,6 @@ class TabelaDialog(wx.Dialog):
 			self._onForceRefresh(ok, fail)
 		except Exception:
 			fail()
-
-	def _on_click_serie_a(self, event):
-		if callable(self._onOpenSerieA):
-			try:
-				self._onOpenSerieA(self)
-			except Exception:
-				pass
-
-	def _on_click_serie_b(self, event):
-		if callable(self._onOpenSerieB):
-			try:
-				self._onOpenSerieB(self)
-			except Exception:
-				pass
 
 	def _on_click_jogos(self, event):
 		if callable(self._onOpenJogos):
@@ -489,7 +460,7 @@ Pressione Esc para voltar à tabela.""",
 
 	def _salvar_tabela_em_txt(self):
 		texto = self._gerar_texto_tabela_simples()
-		nomePadrao = _("Tabela do Brasileirão — Série B.txt") if self.serie == "B" else _("Tabela do Brasileirão — Série A.txt")
+		nomePadrao = _("Tabela do Brasileirão — Série A.txt")
 		try:
 			dlg = wx.FileDialog(
 				self,
@@ -757,10 +728,10 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			ui.message(_("Não foi possível carregar os próximos jogos. Tente mais tarde."))
 
 	def _cache_file_for_serie(self, serie: str) -> str:
-		return CACHE_FILE_B if (serie or "A").upper() == "B" else CACHE_FILE_A
+		return CACHE_FILE_A
 
 	def _url_for_serie(self, serie: str) -> str:
-		return REMOTE_JSON_URL_A_B if (serie or "A").upper() == "B" else REMOTE_JSON_URL_A_A
+		return REMOTE_JSON_URL_A_A
 
 	def _carregar_cache(self, serie: str):
 		cache = _read_json(self._cache_file_for_serie(serie))
@@ -938,29 +909,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 	def _mostrar_tabela(self, dados, serie: str):
 		try:
-			def openA(currentDlg):
-				try:
-					currentDlg.Close()
-				except Exception:
-					pass
-				self._open_serie("A")
-
-			def openB(currentDlg):
-				try:
-					currentDlg.Close()
-				except Exception:
-					pass
-				self._open_serie("B")
-
 			def openJogos(currentDlg):
 				self._abrir_proximos_jogos(tabelaDialog=currentDlg)
 
 			dlg = TabelaDialog(
 				dados,
-				serie=serie,
 				onForceRefresh=lambda ok, fail: self._force_refresh_from_dialog(serie, ok, fail),
-				onOpenSerieA=openA if (serie or "A").upper() == "B" else None,
-				onOpenSerieB=openB if (serie or "A").upper() == "A" else None,
 				onOpenJogos=openJogos,
 			)
 			dlg.ShowModal()
@@ -975,7 +929,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		self._baixar_json_em_thread(serie, ok, fail)
 
 	def _open_serie(self, serie: str):
-		serie = (serie or "A").upper()
+		serie = "A"
 		self._currentSerie = serie
 
 		if self._fetchInProgress:
