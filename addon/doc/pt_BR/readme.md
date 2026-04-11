@@ -8,18 +8,20 @@
 
 O **Tabela Brasileirão** é um complemento para o NVDA que permite consultar, com acessibilidade, a **classificação do Brasileirão Série A**.
 
-Os dados são obtidos em **www.sentidodabola.com.br**.
+Os dados são mantidos e disponibilizados pelo autor do complemento.
 
 ---
 
 ## ✅ Como usar
 
 ### Abrir a tabela
-- Atalho padrão: **Control + Shift + T** (abre a **Série A**)
+- Atalho padrão: **Control + Shift + T**
+
+### Próximos jogos
+Dentro da janela da tabela, use o botão **Próximos Jogos** para ver os confrontos das próximas rodadas.
 
 ### Atualizar a tabela
-Dentro da janela, use o botão:
-- **Atualizar tabela**
+Dentro da janela, use o botão **Atualizar tabela** para forçar uma atualização imediata.
 
 ---
 
@@ -37,13 +39,16 @@ Na lista de classificação, você pode pressionar:
 - **P**: Gols pró
 - **C**: Gols contra
 - **A**: Aproveitamento
+- **Ctrl+C**: copia a linha selecionada
+- **Ctrl+A**: copia a tabela inteira
+- **Ctrl+S**: salva a tabela em TXT
+- **Esc**: fecha a janela
 
 ---
 
 ## 💾 Cache (mais rápido e economiza dados)
 
-O complemento usa cache por **30 minutos** para abrir mais rápido:
-Se quiser forçar a atualização imediata, use o botão **Atualizar tabela**.
+O complemento usa cache por **30 minutos** para abrir mais rápido. Se quiser forçar a atualização imediata, use o botão **Atualizar tabela**.
 
 ---
 
