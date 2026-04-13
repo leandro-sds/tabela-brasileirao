@@ -6,9 +6,9 @@ def _(arg):
 addon_info = {
 	"addon_name": "tabelaBrasileirao",
 	"addon_summary": _("Tabela do Brasileirão"),
-	"addon_description": _("""Mostra a classificação do Brasileirão Série A no NVDA.
+	"addon_description": _("""Mostra a classificação do Brasileirão Série A e Série B no NVDA.
 Atalhos na tabela: V/E/D/S/J/P/C/A."""),
-	"addon_version": "2026.4.11",
+	"addon_version": "2026.4.13",
 	"addon_author": "Leandro Souza",
 	"addon_url": "https://github.com/leandro-sds/tabela-brasileirao/",
 	"addon_docFileName": "readme.md",

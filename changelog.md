@@ -1,5 +1,11 @@
 # 📜 Changelog
 
+## [2026.4.13]
+- Reintroduzido suporte à **Série B**.
+- Botões **Tabela Série A** e **Tabela Série B** de volta na janela.
+- Ao trocar de série, a janela atual permanece aberta em caso de erro.
+- Limpeza de código: removido import não utilizado e atributos desnecessários.
+
 ## [2026.4.11]
 - Infraestrutura de dados migrada para repositório próprio do autor no GitHub.
 - Removida dependência de servidor externo para atualização da tabela.

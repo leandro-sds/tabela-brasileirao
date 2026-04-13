@@ -1,7 +1,6 @@
 import globalPluginHandler
 import ui
 import urllib.request
-import urllib.error
 import json
 import tones
 import wx
@@ -19,7 +18,8 @@ CACHE_TTL_SECONDS = 1800
 HTTP_TIMEOUT_SECONDS = 12
 LOADING_BEEP_INTERVAL_MS = 1800
 
-REMOTE_JSON_URL = "https://leandro-sds.github.io/brasileirao-tabela/cache_tabela_A.json"
+REMOTE_JSON_URL_A = "https://leandro-sds.github.io/brasileirao-tabela/cache_tabela_A.json"
+REMOTE_JSON_URL_B = "https://leandro-sds.github.io/brasileirao-tabela/cache_tabela_B.json"
 REMOTE_JOGOS_URL = "https://leandro-sds.github.io/brasileirao-tabela/proximos_jogos.txt"
 
 
@@ -56,6 +56,7 @@ except Exception:
 
 BASE_DIR = _safe_makedirs(BASE_DIR)
 CACHE_FILE_A = os.path.join(BASE_DIR, "cache_tabela_A.json")
+CACHE_FILE_B = os.path.join(BASE_DIR, "cache_tabela_B.json")
 CACHE_FILE_JOGOS = os.path.join(BASE_DIR, "cache_proximos_jogos.txt")
 
 
@@ -168,15 +169,17 @@ class JogosDialog(wx.Dialog):
 
 
 class TabelaDialog(wx.Dialog):
-	def __init__(self, dados, onForceRefresh=None, onOpenJogos=None):
+	def __init__(self, dados, serie="A", onForceRefresh=None, onOpenSerieA=None, onOpenSerieB=None, onOpenJogos=None):
 		super(TabelaDialog, self).__init__(
 			gui.mainFrame,
-			title=_("Classificação do Brasileirão — Série A"),
+			title=_("Classificação do Brasileirão — Série B") if (serie or "").upper() == "B" else _("Classificação do Brasileirão — Série A"),
 			style=wx.DEFAULT_DIALOG_STYLE | wx.MAXIMIZE_BOX | wx.RESIZE_BORDER,
 		)
 		self.dados = dados or []
-		self.serie = "A"
+		self.serie = (serie or "A").upper()
 		self._onForceRefresh = onForceRefresh
+		self._onOpenSerieA = onOpenSerieA
+		self._onOpenSerieB = onOpenSerieB
 		self._onOpenJogos = onOpenJogos
 
 		mainSizer = wx.BoxSizer(wx.VERTICAL)
@@ -221,6 +224,12 @@ class TabelaDialog(wx.Dialog):
 		self.btnAtualizar = wx.Button(self, wx.ID_ANY, _("Atualizar tabela"))
 		btnSizer.Add(self.btnAtualizar, 0)
 
+		self.btnSerieA = wx.Button(self, wx.ID_ANY, _("Tabela Série A"))
+		btnSizer.Add(self.btnSerieA, 0)
+
+		self.btnSerieB = wx.Button(self, wx.ID_ANY, _("Tabela Série B"))
+		btnSizer.Add(self.btnSerieB, 0)
+
 		self.btnJogos = wx.Button(self, wx.ID_ANY, _("Próximos Jogos"))
 		btnSizer.Add(self.btnJogos, 0)
 
@@ -238,6 +247,8 @@ class TabelaDialog(wx.Dialog):
 			self.btnAtualizar.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 			self.btnCopiar.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 			self.btnSalvar.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
+			self.btnSerieA.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
+			self.btnSerieB.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 			self.btnJogos.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 		except Exception:
 			pass
@@ -246,6 +257,8 @@ class TabelaDialog(wx.Dialog):
 		mainSizer.Add(btnSizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
 		self.btnAtualizar.Bind(wx.EVT_BUTTON, self._on_click_atualizar)
+		self.btnSerieA.Bind(wx.EVT_BUTTON, self._on_click_serie_a)
+		self.btnSerieB.Bind(wx.EVT_BUTTON, self._on_click_serie_b)
 		self.btnJogos.Bind(wx.EVT_BUTTON, self._on_click_jogos)
 		self.btnCopiar.Bind(wx.EVT_BUTTON, lambda evt: self._copiar_tabela_para_area_de_transferencia())
 		self.btnSalvar.Bind(wx.EVT_BUTTON, lambda evt: self._salvar_tabela_em_txt())
@@ -253,7 +266,15 @@ class TabelaDialog(wx.Dialog):
 		if not callable(self._onForceRefresh):
 			self.btnAtualizar.Disable()
 
-		if not callable(self._onOpenJogos):
+		try:
+			if self.serie == "A":
+				self.btnSerieA.Disable()
+			else:
+				self.btnSerieB.Disable()
+		except Exception:
+			pass
+
+		if not callable(self._onOpenJogos) or self.serie == "B":
 			self.btnJogos.Disable()
 
 		self.SetSizer(mainSizer)
@@ -329,6 +350,20 @@ class TabelaDialog(wx.Dialog):
 			self._onForceRefresh(ok, fail)
 		except Exception:
 			fail()
+
+	def _on_click_serie_a(self, event):
+		if callable(self._onOpenSerieA):
+			try:
+				self._onOpenSerieA(self)
+			except Exception:
+				pass
+
+	def _on_click_serie_b(self, event):
+		if callable(self._onOpenSerieB):
+			try:
+				self._onOpenSerieB(self)
+			except Exception:
+				pass
 
 	def _on_click_jogos(self, event):
 		if callable(self._onOpenJogos):
@@ -449,7 +484,7 @@ Pressione Esc para voltar à tabela.""",
 
 	def _salvar_tabela_em_txt(self):
 		texto = self._gerar_texto_tabela_simples()
-		nomePadrao = _("Tabela do Brasileirão — Série A.txt")
+		nomePadrao = _("Tabela do Brasileirão — Série B.txt") if self.serie == "B" else _("Tabela do Brasileirão — Série A.txt")
 		try:
 			dlg = wx.FileDialog(
 				self,
@@ -715,14 +750,14 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		except Exception:
 			ui.message(_("Não foi possível carregar os próximos jogos. Tente mais tarde."))
 
-	def _cache_file_for_serie(self) -> str:
-		return CACHE_FILE_A
+	def _cache_file_for_serie(self, serie: str) -> str:
+		return CACHE_FILE_B if (serie or "A").upper() == "B" else CACHE_FILE_A
 
-	def _url_for_serie(self) -> str:
-		return REMOTE_JSON_URL
+	def _url_for_serie(self, serie: str) -> str:
+		return REMOTE_JSON_URL_B if (serie or "A").upper() == "B" else REMOTE_JSON_URL_A
 
-	def _carregar_cache(self):
-		cache = _read_json(self._cache_file_for_serie())
+	def _carregar_cache(self, serie: str):
+		cache = _read_json(self._cache_file_for_serie(serie))
 		if not isinstance(cache, dict):
 			return None
 		timestamp = cache.get("timestamp")
@@ -733,8 +768,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			return None
 		return dados
 
-	def _carregar_cache_stale(self):
-		cache = _read_json(self._cache_file_for_serie())
+	def _carregar_cache_stale(self, serie: str):
+		cache = _read_json(self._cache_file_for_serie(serie))
 		if not isinstance(cache, dict):
 			return (None, None)
 		timestamp = cache.get("timestamp")
@@ -746,9 +781,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			idade = 0
 		return (dados, idade)
 
-	def _salvar_cache(self, dados):
+	def _salvar_cache(self, serie: str, dados):
 		try:
-			_write_json_atomic(self._cache_file_for_serie(), {"timestamp": time.time(), "dados": dados})
+			_write_json_atomic(self._cache_file_for_serie(serie), {"timestamp": time.time(), "dados": dados})
 		except Exception:
 			log.exception("Falha ao salvar cache")
 
@@ -861,8 +896,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 		self._baixar_jogos_em_thread(ok, fail)
 
-	def _baixar_json_em_thread(self, on_ok, on_fail):
-		url = self._url_for_serie()
+	def _baixar_json_em_thread(self, serie: str, on_ok, on_fail):
+		url = self._url_for_serie(serie)
 
 		def worker():
 			try:
@@ -883,7 +918,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 					dados = obj
 				else:
 					raise ValueError("JSON inválido")
-				self._salvar_cache(dados)
+				self._salvar_cache(serie, dados)
 				wx.CallAfter(on_ok, dados)
 			except Exception:
 				wx.CallAfter(on_fail)
@@ -895,56 +930,113 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		self._start_loading_timer()
 		threading.Thread(target=worker, name="TabelaBrasileiraoFetch", daemon=True).start()
 
-	def _mostrar_tabela(self, dados):
+	def _mostrar_tabela(self, dados, serie: str):
 		try:
+			def openA(currentDlg):
+				self._open_serie_substituindo("A", currentDlg)
+
+			def openB(currentDlg):
+				self._open_serie_substituindo("B", currentDlg)
+
 			def openJogos(currentDlg):
 				self._abrir_proximos_jogos(tabelaDialog=currentDlg)
 
 			dlg = TabelaDialog(
 				dados,
-				onForceRefresh=lambda ok, fail: self._force_refresh_from_dialog(ok, fail),
+				serie=serie,
+				onForceRefresh=lambda ok, fail: self._force_refresh_from_dialog(serie, ok, fail),
+				onOpenSerieA=openA if serie.upper() == "B" else None,
+				onOpenSerieB=openB if serie.upper() == "A" else None,
 				onOpenJogos=openJogos,
 			)
 			dlg.ShowModal()
 		except Exception:
 			log.exception("Falha ao exibir diálogo de tabela")
 
-	def _force_refresh_from_dialog(self, ok, fail):
+	def _force_refresh_from_dialog(self, serie: str, ok, fail):
 		if self._fetchInProgress:
 			ui.message(_("Aguarde, já estou buscando dados."))
 			fail()
 			return
-		self._baixar_json_em_thread(ok, fail)
+		self._baixar_json_em_thread(serie, ok, fail)
 
-	def _open_serie(self):
+	def _open_serie_substituindo(self, serie: str, dlgAtual=None):
+		"""Abre uma nova série e só fecha a janela atual se tudo correr bem."""
+		serie = (serie or "A").upper()
+
 		if self._fetchInProgress:
 			ui.message(_("Aguarde, buscando dados."))
 			return
 
-		dados_cache = self._carregar_cache()
+		dados_cache = self._carregar_cache(serie)
 		if dados_cache is not None:
 			tones.beep(440, 30)
-			wx.CallAfter(lambda: self._mostrar_tabela(dados_cache))
+			try:
+				if dlgAtual:
+					dlgAtual.Close()
+			except Exception:
+				pass
+			wx.CallAfter(lambda: self._mostrar_tabela(dados_cache, serie))
 			return
 
 		tones.beep(880, 50)
-		ui.message(_("Baixando Tabela Brasileirão Série A."))
+		ui.message(_("Buscando dados da tabela."))
 
 		def ok(dados):
-			self._mostrar_tabela(dados)
+			try:
+				if dlgAtual:
+					dlgAtual.Close()
+			except Exception:
+				pass
+			self._mostrar_tabela(dados, serie)
 
 		def fail():
-			dados_cache_stale, _ = self._carregar_cache_stale()
+			dados_cache_stale, _idade = self._carregar_cache_stale(serie)
 			if dados_cache_stale is not None:
 				ui.message(_("Mostrando dados do cache."))
-				self._mostrar_tabela(dados_cache_stale)
+				try:
+					if dlgAtual:
+						dlgAtual.Close()
+				except Exception:
+					pass
+				self._mostrar_tabela(dados_cache_stale, serie)
+			else:
+				self._mostrar_erro_simples()
+				# janela atual permanece aberta
+
+		self._baixar_json_em_thread(serie, ok, fail)
+
+	def _open_serie(self, serie: str):
+		serie = (serie or "A").upper()
+
+		if self._fetchInProgress:
+			ui.message(_("Aguarde, buscando dados."))
+			return
+
+		dados_cache = self._carregar_cache(serie)
+		if dados_cache is not None:
+			tones.beep(440, 30)
+			wx.CallAfter(lambda: self._mostrar_tabela(dados_cache, serie))
+			return
+
+		tones.beep(880, 50)
+		ui.message(_("Buscando dados da tabela."))
+
+		def ok(dados):
+			self._mostrar_tabela(dados, serie)
+
+		def fail():
+			dados_cache_stale, _idade = self._carregar_cache_stale(serie)
+			if dados_cache_stale is not None:
+				ui.message(_("Mostrando dados do cache."))
+				self._mostrar_tabela(dados_cache_stale, serie)
 			else:
 				self._mostrar_erro_simples()
 
-		self._baixar_json_em_thread(ok, fail)
+		self._baixar_json_em_thread(serie, ok, fail)
 
 	def script_tabela(self, gesture):
-		self._open_serie()
+		self._open_serie("A")
 
 	def script_proximos_jogos(self, gesture):
 		self._abrir_proximos_jogos()

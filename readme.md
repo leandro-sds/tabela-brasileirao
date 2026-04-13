@@ -6,7 +6,7 @@
 
 ## ⚽ O que é
 
-O **Tabela Brasileirão** é um complemento para o NVDA que permite consultar, com acessibilidade, a **classificação do Brasileirão Série A**.
+O **Tabela Brasileirão** é um complemento para o NVDA que permite consultar, com acessibilidade, a **classificação do Brasileirão Série A e Série B**.
 
 Os dados são mantidos e disponibilizados pelo autor do complemento.
 
@@ -15,10 +15,13 @@ Os dados são mantidos e disponibilizados pelo autor do complemento.
 ## ✅ Como usar
 
 ### Abrir a tabela
-- Atalho padrão: **Control + Shift + T**
+- Atalho padrão: **Control + Shift + T** (abre a Série A)
+
+### Alternar entre Série A e Série B
+Dentro da janela da tabela, use os botões **Tabela Série A** ou **Tabela Série B** para alternar entre as séries.
 
 ### Próximos jogos
-Dentro da janela da tabela, use o botão **Próximos Jogos** para ver os confrontos das próximas rodadas.
+Dentro da janela da Série A, use o botão **Próximos Jogos** para ver os confrontos das próximas rodadas.
 
 ### Atualizar a tabela
 Dentro da janela, use o botão **Atualizar tabela** para forçar uma atualização imediata.
