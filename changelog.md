@@ -1,5 +1,8 @@
 # 📜 Changelog
 
+## [2026.5.02]
+- Ajustada a compatibilidade para NVDA 2026.1
+
 ## [2026.4.13]
 - Reintroduzido suporte à **Série B**.
 - Botões **Tabela Série A** e **Tabela Série B** de volta na janela.
