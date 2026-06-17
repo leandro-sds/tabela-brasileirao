@@ -18,9 +18,9 @@ CACHE_TTL_SECONDS = 1800
 HTTP_TIMEOUT_SECONDS = 12
 LOADING_BEEP_INTERVAL_MS = 1800
 
-REMOTE_JSON_URL_A = "https://leandro-sds.github.io/brasileirao-tabela/cache_tabela_A.json"
-REMOTE_JSON_URL_B = "https://leandro-sds.github.io/brasileirao-tabela/cache_tabela_B.json"
-REMOTE_JOGOS_URL = "https://leandro-sds.github.io/brasileirao-tabela/proximos_jogos.txt"
+REMOTE_JSON_URL_A = "https://www.wpacessivel.com.br/tabela/cache_tabela_A.json"
+REMOTE_JSON_URL_B = "https://www.wpacessivel.com.br/tabela/cache_tabela_B.json"
+REMOTE_JOGOS_URL = "https://www.wpacessivel.com.br/tabela/proximos_jogos.txt"
 
 
 def _safe_makedirs(path: str) -> str:

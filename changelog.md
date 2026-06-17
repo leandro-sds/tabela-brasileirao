@@ -1,5 +1,10 @@
 # 📜 Changelog
 
+## [2026.6.17]
+- Infraestrutura de dados migrada para o site do desenvolvedor: **www.wpacessivel.com.br**.
+- Atualização automática da tabela a cada 30 minutos.
+- Sem mudanças visíveis na interface; todas as funcionalidades preservadas.
+
 ## [2026.5.02]
 - Ajustada a compatibilidade para NVDA 2026.1
 

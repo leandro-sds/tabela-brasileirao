@@ -8,7 +8,7 @@
 
 O **Tabela Brasileirão** é um complemento para o NVDA que permite consultar, com acessibilidade, a **classificação do Brasileirão Série A e Série B**.
 
-Os dados são mantidos e disponibilizados pelo autor do complemento.
+Os dados são obtidos do site do desenvolvedor, **www.wpacessivel.com.br**, e atualizados automaticamente a cada 30 minutos.
 
 ---
 
