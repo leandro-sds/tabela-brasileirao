@@ -9,7 +9,7 @@ addon_info = {
 	"addon_description": _("""Mostra a classificação do Brasileirão Série A e Série B no NVDA.
 Dados obtidos de www.wpacessivel.com.br, site do desenvolvedor.
 Atalhos na tabela: V/E/D/S/J/P/C/A."""),
-	"addon_version": "2026.6.17",
+	"addon_version": "2026.7.13",
 	"addon_author": "Leandro Souza",
 	"addon_url": "https://github.com/leandro-sds/tabela-brasileirao/",
 	"addon_docFileName": "readme.md",

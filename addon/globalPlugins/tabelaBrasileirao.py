@@ -20,7 +20,6 @@ LOADING_BEEP_INTERVAL_MS = 1800
 
 REMOTE_JSON_URL_A = "https://www.wpacessivel.com.br/tabela/cache_tabela_A.json"
 REMOTE_JSON_URL_B = "https://www.wpacessivel.com.br/tabela/cache_tabela_B.json"
-REMOTE_JOGOS_URL = "https://www.wpacessivel.com.br/tabela/proximos_jogos.txt"
 
 
 def _safe_makedirs(path: str) -> str:
@@ -57,7 +56,6 @@ except Exception:
 BASE_DIR = _safe_makedirs(BASE_DIR)
 CACHE_FILE_A = os.path.join(BASE_DIR, "cache_tabela_A.json")
 CACHE_FILE_B = os.path.join(BASE_DIR, "cache_tabela_B.json")
-CACHE_FILE_JOGOS = os.path.join(BASE_DIR, "cache_proximos_jogos.txt")
 
 
 class ErrorDialog(wx.MessageDialog):
@@ -70,106 +68,8 @@ class ErrorDialog(wx.MessageDialog):
 		)
 
 
-class ErrorDialogJogos(wx.MessageDialog):
-	def __init__(self, parent=None):
-		super().__init__(
-			parent or gui.mainFrame,
-			_("Não foi possível carregar os próximos jogos.\nTente mais tarde."),
-			_("Próximos Jogos"),
-			wx.OK | wx.ICON_WARNING
-		)
-
-
-class JogosDialog(wx.Dialog):
-	def __init__(self, itens, tabelaDialog=None):
-		super(JogosDialog, self).__init__(
-			gui.mainFrame,
-			title=_("Próximos Jogos"),
-			style=wx.DEFAULT_DIALOG_STYLE | wx.MAXIMIZE_BOX | wx.RESIZE_BORDER,
-		)
-		self.itens = itens or []
-		self._tabelaDialog = tabelaDialog
-
-		mainSizer = wx.BoxSizer(wx.VERTICAL)
-
-		self.texto = wx.TextCtrl(
-			self,
-			style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2 | wx.BORDER_SIMPLE
-		)
-
-		try:
-			f = self.texto.GetFont()
-			pt = f.GetPointSize()
-			if pt and pt > 0:
-				f.SetPointSize(pt + 2)
-				self.texto.SetFont(f)
-		except Exception:
-			pass
-
-		self._popular_texto()
-
-		mainSizer.Add(self.texto, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 10)
-
-		self.Bind(wx.EVT_CHAR_HOOK, self._ao_pressionar_tecla)
-
-		btnSizer = wx.BoxSizer(wx.HORIZONTAL)
-		btnSizer.AddStretchSpacer(1)
-
-		self.btnFechar = wx.Button(self, wx.ID_CANCEL, _("Fechar"))
-		try:
-			self.btnFechar.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
-		except Exception:
-			pass
-
-		btnSizer.Add(self.btnFechar, 0)
-		mainSizer.Add(btnSizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
-
-		self.btnFechar.Bind(wx.EVT_BUTTON, lambda evt: self._fechar_e_voltar())
-		self.Bind(wx.EVT_CLOSE, lambda evt: self._fechar_e_voltar())
-
-		self.SetSizer(mainSizer)
-		self.Maximize(True)
-		self.Raise()
-		self.texto.SetFocus()
-		self.texto.SetInsertionPoint(0)
-
-	def _popular_texto(self):
-		linhas = []
-		for item in self.itens:
-			if item.get("tipo") == "rodada":
-				if linhas:
-					linhas.append("")
-				linhas.append(item.get("texto", ""))
-				linhas.append("")
-			else:
-				confronto = item.get("confronto", "")
-				data = item.get("data", "")
-				horario = item.get("horario", "")
-				linhas.append(f"{confronto} — {data} às {horario}")
-		self.texto.SetValue("\n".join(linhas))
-
-	def _ao_pressionar_tecla(self, event):
-		keyCode = event.GetKeyCode()
-		if keyCode == wx.WXK_ESCAPE:
-			self._fechar_e_voltar()
-			return
-		event.Skip()
-
-	def _fechar_e_voltar(self):
-		try:
-			if self._tabelaDialog and self._tabelaDialog.IsShown():
-				self._tabelaDialog.Raise()
-				self._tabelaDialog.lista.SetFocus()
-		except Exception:
-			pass
-		try:
-			self.Destroy()
-		except Exception:
-			pass
-
-
 class TabelaDialog(wx.Dialog):
-	def __init__(self, dados, serie="A", onForceRefresh=None, onOpenSerieA=None, onOpenSerieB=None, onOpenJogos=None):
+	def __init__(self, dados, serie="A", onForceRefresh=None, onOpenSerieA=None, onOpenSerieB=None):
 		super(TabelaDialog, self).__init__(
 			gui.mainFrame,
 			title=_("Classificação do Brasileirão — Série B") if (serie or "").upper() == "B" else _("Classificação do Brasileirão — Série A"),
@@ -180,7 +80,6 @@ class TabelaDialog(wx.Dialog):
 		self._onForceRefresh = onForceRefresh
 		self._onOpenSerieA = onOpenSerieA
 		self._onOpenSerieB = onOpenSerieB
-		self._onOpenJogos = onOpenJogos
 
 		mainSizer = wx.BoxSizer(wx.VERTICAL)
 
@@ -230,9 +129,6 @@ class TabelaDialog(wx.Dialog):
 		self.btnSerieB = wx.Button(self, wx.ID_ANY, _("Tabela Série B"))
 		btnSizer.Add(self.btnSerieB, 0)
 
-		self.btnJogos = wx.Button(self, wx.ID_ANY, _("Próximos Jogos"))
-		btnSizer.Add(self.btnJogos, 0)
-
 		self.btnCopiar = wx.Button(self, wx.ID_ANY, _("Copiar tabela"))
 		btnSizer.Add(self.btnCopiar, 0)
 
@@ -249,7 +145,6 @@ class TabelaDialog(wx.Dialog):
 			self.btnSalvar.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 			self.btnSerieA.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 			self.btnSerieB.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
-			self.btnJogos.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 		except Exception:
 			pass
 
@@ -259,7 +154,6 @@ class TabelaDialog(wx.Dialog):
 		self.btnAtualizar.Bind(wx.EVT_BUTTON, self._on_click_atualizar)
 		self.btnSerieA.Bind(wx.EVT_BUTTON, self._on_click_serie_a)
 		self.btnSerieB.Bind(wx.EVT_BUTTON, self._on_click_serie_b)
-		self.btnJogos.Bind(wx.EVT_BUTTON, self._on_click_jogos)
 		self.btnCopiar.Bind(wx.EVT_BUTTON, lambda evt: self._copiar_tabela_para_area_de_transferencia())
 		self.btnSalvar.Bind(wx.EVT_BUTTON, lambda evt: self._salvar_tabela_em_txt())
 
@@ -273,9 +167,6 @@ class TabelaDialog(wx.Dialog):
 				self.btnSerieB.Disable()
 		except Exception:
 			pass
-
-		if not callable(self._onOpenJogos) or self.serie == "B":
-			self.btnJogos.Disable()
 
 		self.SetSizer(mainSizer)
 		self.Maximize(True)
@@ -365,13 +256,6 @@ class TabelaDialog(wx.Dialog):
 			except Exception:
 				pass
 
-	def _on_click_jogos(self, event):
-		if callable(self._onOpenJogos):
-			try:
-				self._onOpenJogos(self)
-			except Exception:
-				pass
-
 	def _ajustar_largura_coluna(self):
 		try:
 			w = self.lista.GetClientSize().GetWidth()
@@ -388,7 +272,6 @@ class TabelaDialog(wx.Dialog):
 			"""Atalhos disponíveis:
 
 - Control + Shift + T: abre a tabela (atalho global do NVDA).
-- Control + Shift + J: abre os próximos jogos (somente dentro da janela da tabela).
 - Esc: fecha a janela.
 - Setas para cima/baixo: navega na lista e anuncia classificação, time e pontos.
 - F1: abre esta ajuda.
@@ -519,10 +402,6 @@ Pressione Esc para voltar à tabela.""",
 			if keyCode in (ord("S"), ord("s")):
 				self._salvar_tabela_em_txt()
 				return
-			if event.ShiftDown() and keyCode in (ord("J"), ord("j")):
-				if callable(self._onOpenJogos):
-					self._onOpenJogos(self)
-				return
 
 		if keyCode == wx.WXK_F1:
 			self._mostrar_ajuda()
@@ -626,7 +505,6 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	def __init__(self, *args, **kwargs):
 		super(GlobalPlugin, self).__init__(*args, **kwargs)
 		self._fetchInProgress = False
-		self._fetchJogosInProgress = False
 		self._toolsMenu = None
 		self._toolsMenuItemOpen = None
 		self._loadingTimer = None
@@ -721,7 +599,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 	def _on_loading_timer(self, event):
 		try:
-			if self._fetchInProgress or self._fetchJogosInProgress:
+			if self._fetchInProgress:
 				tones.beep(660, 15)
 			else:
 				self._stop_loading_timer()
@@ -738,17 +616,6 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 				dlg.Destroy()
 		except Exception:
 			ui.message(_("Não foi possível carregar os dados da tabela. Tente mais tarde."))
-
-	def _mostrar_erro_jogos(self):
-		try:
-			tones.beep(220, 120)
-			dlg = ErrorDialogJogos(gui.mainFrame)
-			try:
-				dlg.ShowModal()
-			finally:
-				dlg.Destroy()
-		except Exception:
-			ui.message(_("Não foi possível carregar os próximos jogos. Tente mais tarde."))
 
 	def _cache_file_for_serie(self, serie: str) -> str:
 		return CACHE_FILE_B if (serie or "A").upper() == "B" else CACHE_FILE_A
@@ -786,115 +653,6 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			_write_json_atomic(self._cache_file_for_serie(serie), {"timestamp": time.time(), "dados": dados})
 		except Exception:
 			log.exception("Falha ao salvar cache")
-
-	def _carregar_cache_jogos(self):
-		try:
-			if not os.path.exists(CACHE_FILE_JOGOS):
-				return None
-			idade = time.time() - os.path.getmtime(CACHE_FILE_JOGOS)
-			if idade >= CACHE_TTL_SECONDS:
-				return None
-			with open(CACHE_FILE_JOGOS, "r", encoding="utf-8") as f:
-				return f.read()
-		except Exception:
-			return None
-
-	def _carregar_cache_jogos_stale(self):
-		try:
-			if not os.path.exists(CACHE_FILE_JOGOS):
-				return None
-			with open(CACHE_FILE_JOGOS, "r", encoding="utf-8") as f:
-				return f.read()
-		except Exception:
-			return None
-
-	def _salvar_cache_jogos(self, conteudo: str):
-		try:
-			tmp = CACHE_FILE_JOGOS + ".tmp"
-			with open(tmp, "w", encoding="utf-8") as f:
-				f.write(conteudo)
-			os.replace(tmp, CACHE_FILE_JOGOS)
-		except Exception:
-			log.exception("Falha ao salvar cache de jogos")
-
-	def _parsear_jogos_txt(self, conteudo: str):
-		itens = []
-		for linha in conteudo.splitlines():
-			linha = linha.strip()
-			if not linha:
-				continue
-			if linha.startswith("#"):
-				itens.append({"tipo": "rodada", "texto": linha.lstrip("#").strip()})
-				continue
-			partes = [p.strip() for p in linha.split("|")]
-			if len(partes) == 3:
-				itens.append({
-					"tipo": "jogo",
-					"confronto": partes[0],
-					"data": partes[1],
-					"horario": partes[2],
-				})
-		return itens
-
-	def _baixar_jogos_em_thread(self, on_ok, on_fail):
-		def worker():
-			try:
-				req = urllib.request.Request(
-					REMOTE_JOGOS_URL,
-					headers={
-						"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-						"Accept": "text/plain",
-						"Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-					},
-				)
-				with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SECONDS) as resp:
-					conteudo = resp.read().decode("utf-8", errors="replace")
-				self._salvar_cache_jogos(conteudo)
-				wx.CallAfter(on_ok, conteudo)
-			except Exception:
-				wx.CallAfter(on_fail)
-			finally:
-				self._fetchJogosInProgress = False
-				self._stop_loading_timer()
-
-		self._fetchJogosInProgress = True
-		self._start_loading_timer()
-		threading.Thread(target=worker, name="BrasileiraoJogosFetch", daemon=True).start()
-
-	def _mostrar_jogos(self, conteudo: str, tabelaDialog=None):
-		try:
-			itens = self._parsear_jogos_txt(conteudo)
-			dlg = JogosDialog(itens, tabelaDialog=tabelaDialog)
-			dlg.Show()
-		except Exception:
-			log.exception("Falha ao exibir diálogo de jogos")
-
-	def _abrir_proximos_jogos(self, tabelaDialog=None):
-		if self._fetchJogosInProgress:
-			ui.message(_("Aguarde, buscando jogos."))
-			return
-
-		cache = self._carregar_cache_jogos()
-		if cache is not None:
-			tones.beep(440, 30)
-			wx.CallAfter(lambda: self._mostrar_jogos(cache, tabelaDialog=tabelaDialog))
-			return
-
-		tones.beep(880, 50)
-		ui.message(_("Buscando próximos jogos."))
-
-		def ok(conteudo):
-			self._mostrar_jogos(conteudo, tabelaDialog=tabelaDialog)
-
-		def fail():
-			stale = self._carregar_cache_jogos_stale()
-			if stale is not None:
-				ui.message(_("Mostrando dados do cache."))
-				self._mostrar_jogos(stale, tabelaDialog=tabelaDialog)
-			else:
-				self._mostrar_erro_jogos()
-
-		self._baixar_jogos_em_thread(ok, fail)
 
 	def _baixar_json_em_thread(self, serie: str, on_ok, on_fail):
 		url = self._url_for_serie(serie)
@@ -938,16 +696,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			def openB(currentDlg):
 				self._open_serie_substituindo("B", currentDlg)
 
-			def openJogos(currentDlg):
-				self._abrir_proximos_jogos(tabelaDialog=currentDlg)
-
 			dlg = TabelaDialog(
 				dados,
 				serie=serie,
 				onForceRefresh=lambda ok, fail: self._force_refresh_from_dialog(serie, ok, fail),
 				onOpenSerieA=openA if serie.upper() == "B" else None,
 				onOpenSerieB=openB if serie.upper() == "A" else None,
-				onOpenJogos=openJogos,
 			)
 			dlg.ShowModal()
 		except Exception:
@@ -1037,9 +791,6 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 	def script_tabela(self, gesture):
 		self._open_serie("A")
-
-	def script_proximos_jogos(self, gesture):
-		self._abrir_proximos_jogos()
 
 	__gestures = {
 		"kb:control+shift+t": "tabela",

@@ -1,5 +1,10 @@
 # 📜 Changelog
 
+## [2026.7.13]
+- Removida a função **Próximos Jogos** e seu atalho **Ctrl+Shift+J**.
+- Interface simplificada: botão "Próximos Jogos" removido da janela da tabela.
+- Limpeza interna: código, cache e dependências relacionados aos jogos foram removidos.
+
 ## [2026.6.17]
 - Infraestrutura de dados migrada para o site do desenvolvedor: **www.wpacessivel.com.br**.
 - Atualização automática da tabela a cada 30 minutos.

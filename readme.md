@@ -20,9 +20,6 @@ Os dados são obtidos do site do desenvolvedor, **www.wpacessivel.com.br**, e at
 ### Alternar entre Série A e Série B
 Dentro da janela da tabela, use os botões **Tabela Série A** ou **Tabela Série B** para alternar entre as séries.
 
-### Próximos jogos
-Dentro da janela da Série A, use o botão **Próximos Jogos** para ver os confrontos das próximas rodadas.
-
 ### Atualizar a tabela
 Dentro da janela, use o botão **Atualizar tabela** para forçar uma atualização imediata.
 
