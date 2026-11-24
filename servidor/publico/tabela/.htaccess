@@ -1,0 +1,14 @@
+# ---------------------------------------------------------------
+# /tabela/  —  www.leandross.com.br
+#
+# Os arquivos cache_tabela_A.json e cache_tabela_B.json continuam
+# acessíveis normalmente. Só a listagem da pasta fica bloqueada.
+# ---------------------------------------------------------------
+
+# Não mostra o conteúdo da pasta para quem abrir /tabela/
+Options -Indexes
+
+# Quem digitar https://www.leandross.com.br/tabela/ vai para a página inicial.
+# 302 (temporário) de propósito: o navegador não guarda para sempre, então dá
+# para mudar isso depois sem ninguém ficar preso no redirecionamento antigo.
+RedirectMatch 302 ^/tabela/?$ /
