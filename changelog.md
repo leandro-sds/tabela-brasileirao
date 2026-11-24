@@ -1,5 +1,17 @@
 # 📜 Changelog
 
+## [2026.11.24]
+- Botão **Atualizar tabela** agora busca a classificação direto da fonte, no momento do clique, em vez de esperar o cache do servidor. Se a fonte não responder, o servidor é usado como plano B, sem mensagem de erro.
+- Infraestrutura de dados migrada para **www.leandross.com.br**.
+- Correção: o rótulo do botão virava "Atualizar agora" depois da primeira atualização; agora continua "Atualizar tabela".
+- A classificação obtida direto da fonte também passa a alimentar o cache local, então reabrir a janela mostra o dado novo.
+- Quando a série está entre temporadas ou em fase de playoff, o complemento avisa que ainda não há classificação nova, em vez de dizer que a fonte está indisponível. São situações diferentes e agora têm mensagens diferentes.
+- Correção: ao atualizar, a lista voltava sempre ao 1º colocado. Agora ela volta no time que estava selecionado, mesmo que ele tenha mudado de posição.
+- Correção: **Copiar tabela** e **Ctrl+C** anunciavam sucesso mesmo quando a área de transferência estava presa por outro programa. Agora o anúncio reflete o que aconteceu de verdade.
+- Correção: clicar em Atualizar com uma busca em andamento mostrava um diálogo de erro depois do aviso para aguardar. Agora só avisa.
+- Correção: fechar a janela com Esc durante a atualização deixava de gerar erro no log do NVDA.
+- A ajuda (F1) agora descreve os botões da janela, inclusive o que o Atualizar tabela faz.
+
 ## [2026.7.13]
 - Removida a função **Próximos Jogos** e seu atalho **Ctrl+Shift+J**.
 - Interface simplificada: botão "Próximos Jogos" removido da janela da tabela.

@@ -8,7 +8,7 @@
 
 O **Tabela Brasileirão** é um complemento para o NVDA que permite consultar, com acessibilidade, a **classificação do Brasileirão Série A e Série B**.
 
-Os dados são obtidos do site do desenvolvedor, **www.wpacessivel.com.br**, e atualizados automaticamente a cada 30 minutos.
+Os dados são obtidos do site do desenvolvedor, **www.leandross.com.br**, que mantém a classificação atualizada automaticamente.
 
 ---
 
@@ -21,7 +21,17 @@ Os dados são obtidos do site do desenvolvedor, **www.wpacessivel.com.br**, e at
 Dentro da janela da tabela, use os botões **Tabela Série A** ou **Tabela Série B** para alternar entre as séries.
 
 ### Atualizar a tabela
-Dentro da janela, use o botão **Atualizar tabela** para forçar uma atualização imediata.
+Use o botão **Atualizar tabela** para buscar a classificação do momento, direto da fonte. É o que usar durante os jogos, quando a classificação muda a cada resultado.
+
+A busca leva alguns segundos e o NVDA emite bipes curtos enquanto isso. Ao terminar, o NVDA anuncia *"Tabela atualizada agora, direto da fonte"*.
+
+Se a fonte não responder, o complemento usa o servidor automaticamente e anuncia *"Tabela atualizada"*.
+
+E se o campeonato estiver entre temporadas ou em fase de playoff, quando não existe classificação para atualizar, o anúncio é *"Esta série ainda não tem classificação nova. Mostrando os últimos dados"*. Isso não é erro: é o campeonato que não tem números novos.
+
+Em nenhum desses casos a janela fecha ou a tabela fica vazia.
+
+Depois de atualizar, a lista volta no time que você tinha selecionado, mesmo que ele tenha mudado de posição — útil para acompanhar um time durante a rodada.
 
 ---
 
@@ -48,7 +58,7 @@ Na lista de classificação, você pode pressionar:
 
 ## 💾 Cache (mais rápido e economiza dados)
 
-O complemento usa cache por **30 minutos** para abrir mais rápido. Se quiser forçar a atualização imediata, use o botão **Atualizar tabela**.
+Ao abrir, o complemento usa cache de **30 minutos** para responder na hora e gastar menos internet. Quando você quer o número do momento, use o botão **Atualizar tabela**: ele ignora o cache e vai direto na fonte.
 
 ---
 
@@ -57,3 +67,9 @@ O complemento usa cache por **30 minutos** para abrir mais rápido. Se quiser fo
 Você pode alterar o atalho em:
 
 **Menu NVDA → Preferências → Definir comandos → Tabela Brasileirão**
+
+---
+
+## 🏁 Fim de temporada
+
+Quando uma série encerra a fase de pontos corridos, a tabela de classificação sai do ar na fonte e o complemento passa a mostrar a **classificação final** daquela temporada. O botão **Atualizar tabela** continua funcionando; ele apenas não encontra números novos até o campeonato seguinte começar.
